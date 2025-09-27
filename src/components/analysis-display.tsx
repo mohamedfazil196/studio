@@ -57,7 +57,7 @@ export function AnalysisDisplay({ fileName, analysis }: AnalysisDisplayProps) {
       </header>
       
       <Tabs defaultValue="patient-summary" className="w-full">
-        <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 h-auto">
+        <TabsList className="grid w-full h-auto grid-cols-2 md:grid-cols-4">
           <TabsTrigger value="patient-summary" className="py-2"><FileText className="w-4 h-4 mr-2" />Patient Summary</TabsTrigger>
           <TabsTrigger value="doctor-summary" className="py-2"><Stethoscope className="w-4 h-4 mr-2" />Doctor Summary</TabsTrigger>
           <TabsTrigger value="suggestions" className="py-2"><HeartPulse className="w-4 h-4 mr-2" />Suggestions</TabsTrigger>

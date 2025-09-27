@@ -1,4 +1,4 @@
-import { FileText, Stethoscope, HeartPulse, MessagesSquare, File as FileIcon, AlertTriangle, ShieldCheck, ShieldAlert } from "lucide-react";
+import { FileText, Stethoscope, HeartPulse, MessagesSquare, File as FileIcon, AlertTriangle, ShieldCheck, ShieldAlert, Pill } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { QAChat } from "./qa-chat";
@@ -57,10 +57,11 @@ export function AnalysisDisplay({ fileName, analysis }: AnalysisDisplayProps) {
       </header>
       
       <Tabs defaultValue="patient-summary" className="w-full">
-        <TabsList className="grid w-full h-auto grid-cols-2 md:grid-cols-4">
+        <TabsList className="grid w-full h-auto grid-cols-2 sm:grid-cols-3 md:grid-cols-5">
           <TabsTrigger value="patient-summary" className="py-2"><FileText className="w-4 h-4 mr-2" />Patient Summary</TabsTrigger>
           <TabsTrigger value="doctor-summary" className="py-2"><Stethoscope className="w-4 h-4 mr-2" />Doctor Summary</TabsTrigger>
           <TabsTrigger value="suggestions" className="py-2"><HeartPulse className="w-4 h-4 mr-2" />Suggestions</TabsTrigger>
+          <TabsTrigger value="medicines" className="py-2"><Pill className="w-4 h-4 mr-2" />Medicines</TabsTrigger>
           <TabsTrigger value="q-and-a" className="py-2"><MessagesSquare className="w-4 h-4 mr-2" />Q&amp;A</TabsTrigger>
         </TabsList>
         
@@ -97,6 +98,19 @@ export function AnalysisDisplay({ fileName, analysis }: AnalysisDisplayProps) {
                     <CardContent>
                          <ScrollArea className="h-[50vh] pr-4">
                             <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{analysis.lifestyleSuggestions}</p>
+                        </ScrollArea>
+                    </CardContent>
+                </Card>
+            </TabsContent>
+            <TabsContent value="medicines">
+                <Card className="shadow-md">
+                    <CardHeader>
+                        <CardTitle className="font-headline text-xl text-primary flex items-center gap-2"><Pill />Recommended Medicines</CardTitle>
+                        <CardDescription>This is not medical advice. Consult a doctor before taking any medication.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                         <ScrollArea className="h-[50vh] pr-4">
+                            <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{analysis.medicines}</p>
                         </ScrollArea>
                     </CardContent>
                 </Card>

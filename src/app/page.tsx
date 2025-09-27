@@ -8,6 +8,7 @@ import { AnalysisDisplay } from "@/components/analysis-display";
 import { generateDoctorStyleSummary } from '@/ai/flows/generate-doctor-style-summary';
 import { generatePatientFriendlySummary } from '@/ai/flows/generate-patient-friendly-summary';
 import { provideLifestyleAndHealthSuggestions } from '@/ai/flows/provide-lifestyle-and-health-suggestions';
+import { recommendMedicines } from '@/ai/flows/recommend-medicines';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 
@@ -16,6 +17,7 @@ export type Analysis = {
   patientSummary: string;
   lifestyleSuggestions: string;
   severity: 'Normal' | 'Needs Attention' | 'Immediate Action';
+  medicines: string;
 };
 
 export default function Home() {
@@ -43,9 +45,10 @@ export default function Home() {
             throw new Error("Failed to generate a doctor-style summary.");
           }
 
-          const [patientSummaryResult, lifestyleSuggestionsResult] = await Promise.all([
+          const [patientSummaryResult, lifestyleSuggestionsResult, medicinesResult] = await Promise.all([
             generatePatientFriendlySummary({ reportData: doctorSummary }),
             provideLifestyleAndHealthSuggestions({ reportText: doctorSummary }),
+            recommendMedicines({ reportSummary: doctorSummary }),
           ]);
 
           setAnalysis({
@@ -53,6 +56,7 @@ export default function Home() {
             patientSummary: patientSummaryResult.summary,
             lifestyleSuggestions: lifestyleSuggestionsResult.suggestions,
             severity: patientSummaryResult.severity,
+            medicines: medicinesResult.medicines,
           });
           setIsProcessing(false);
         } catch (error) {

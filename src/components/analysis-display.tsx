@@ -1,4 +1,4 @@
-import { FileText, Stethoscope, HeartPulse, MessagesSquare, File as FileIcon, AlertTriangle, ShieldCheck, ShieldAlert, Pill } from "lucide-react";
+import { FileText, Stethoscope, HeartPulse, MessagesSquare, File as FileIcon, AlertTriangle, ShieldCheck, ShieldAlert, Pill, Languages, Volume2, Loader2, Play, Pause } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { QAChat } from "./qa-chat";
@@ -6,6 +6,11 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { type Analysis } from "@/app/page";
+import { Button } from "./ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
+import { useState, useRef } from "react";
+import { translateAndSpeak } from "@/ai/flows/translate-and-speak";
+import { useToast } from "@/hooks/use-toast";
 
 type AnalysisDisplayProps = {
   fileName: string;
@@ -33,10 +38,84 @@ const severityConfig = {
     }
 }
 
+const languages = [
+    { code: 'en', name: 'English' },
+    { code: 'hi', name: 'Hindi' },
+    { code: 'ta', name: 'Tamil' },
+    { code: 'te', name: 'Telugu' },
+    { code: 'kn', name: 'Kannada' },
+    { code: 'ml', name: 'Malayalam' },
+    { code: 'bn', name: 'Bengali' },
+    { code: 'gu', name: 'Gujarati' },
+    { code: 'mr', name: 'Marathi' },
+    { code: 'pa', name: 'Punjabi' },
+];
+
 export function AnalysisDisplay({ fileName, analysis }: AnalysisDisplayProps) {
   const severity = analysis.severity || 'Normal';
   const config = severityConfig[severity];
   const Icon = config.icon;
+
+  const [selectedLanguage, setSelectedLanguage] = useState('en');
+  const [translatedSummary, setTranslatedSummary] = useState(analysis.patientSummary);
+  const [isTranslating, setIsTranslating] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const { toast } = useToast();
+
+  const handleLanguageChange = async (langCode: string) => {
+      setSelectedLanguage(langCode);
+      if (langCode === 'en') {
+          setTranslatedSummary(analysis.patientSummary);
+          return;
+      }
+
+      setIsTranslating(true);
+      try {
+        const result = await translateAndSpeak({ text: analysis.patientSummary, targetLanguage: langCode });
+        setTranslatedSummary(result.translatedText);
+        if (audioRef.current) {
+            audioRef.current.src = result.audioDataUri;
+        } else {
+            audioRef.current = new Audio(result.audioDataUri);
+        }
+      } catch (error) {
+          console.error('Translation error:', error);
+          toast({
+              title: "Translation Failed",
+              description: "Could not translate the summary.",
+              variant: "destructive"
+          });
+          setTranslatedSummary(analysis.patientSummary);
+      } finally {
+          setIsTranslating(false);
+      }
+  }
+
+  const handlePlayPause = async () => {
+    if (!audioRef.current) {
+        if (selectedLanguage === 'en') {
+            audioRef.current = new Audio();
+        } else {
+            await handleLanguageChange(selectedLanguage);
+        }
+    }
+
+    if (audioRef.current) {
+        if (isPlaying) {
+            audioRef.current.pause();
+            setIsPlaying(false);
+        } else {
+            if(!audioRef.current.src){
+                await handleLanguageChange(selectedLanguage);
+            }
+            audioRef.current.play();
+            setIsPlaying(true);
+            audioRef.current.onended = () => setIsPlaying(false);
+        }
+    }
+  };
+
 
   return (
     <div className="w-full max-w-6xl mx-auto animate-fade-in">
@@ -62,18 +141,43 @@ export function AnalysisDisplay({ fileName, analysis }: AnalysisDisplayProps) {
           <TabsTrigger value="doctor-summary" className="py-2"><Stethoscope className="w-4 h-4 mr-2" />Doctor Summary</TabsTrigger>
           <TabsTrigger value="suggestions" className="py-2"><HeartPulse className="w-4 h-4 mr-2" />Suggestions</TabsTrigger>
           <TabsTrigger value="medicines" className="py-2"><Pill className="w-4 h-4 mr-2" />Medicines</TabsTrigger>
-          <TabsTrigger value="q-and-a" className="py-2"><MessagesSquare className="w-4 h-4 mr-2" />Q&amp;A</TabsTrigger>
+          <TabsTrigger value="q-and-a" className="py-2"><MessagesSquare className="w-4 h-4 mr-2" />Q&A</TabsTrigger>
         </TabsList>
         
         <div className="mt-4">
             <TabsContent value="patient-summary">
                 <Card className="shadow-md">
                     <CardHeader>
-                        <CardTitle className="font-headline text-xl text-primary flex items-center gap-2"><FileText />Patient-Friendly Summary</CardTitle>
+                        <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
+                            <CardTitle className="font-headline text-xl text-primary flex items-center gap-2"><FileText />Patient-Friendly Summary</CardTitle>
+                            <div className="flex items-center gap-2">
+                                <Select onValueChange={handleLanguageChange} defaultValue="en">
+                                    <SelectTrigger className="w-[180px]">
+                                        <Languages className="w-4 h-4 mr-2" />
+                                        <SelectValue placeholder="Language" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {languages.map(lang => (
+                                            <SelectItem key={lang.code} value={lang.code}>{lang.name}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                <Button size="icon" variant="outline" onClick={handlePlayPause} disabled={isTranslating}>
+                                    {isTranslating ? <Loader2 className="animate-spin" /> : isPlaying ? <Pause /> : <Play />}
+                                    <span className="sr-only">Play or pause summary</span>
+                                </Button>
+                            </div>
+                        </div>
                     </CardHeader>
                     <CardContent>
                         <ScrollArea className="h-[50vh] pr-4">
-                            <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{analysis.patientSummary}</p>
+                            {isTranslating ? (
+                                <div className="flex items-center justify-center h-full">
+                                    <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                                </div>
+                            ) : (
+                                <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{translatedSummary}</p>
+                            )}
                         </ScrollArea>
                     </CardContent>
                 </Card>
@@ -93,7 +197,7 @@ export function AnalysisDisplay({ fileName, analysis }: AnalysisDisplayProps) {
             <TabsContent value="suggestions">
                 <Card className="shadow-md">
                     <CardHeader>
-                        <CardTitle className="font-headline text-xl text-primary flex items-center gap-2"><HeartPulse />Lifestyle &amp; Health Suggestions</CardTitle>
+                        <CardTitle className="font-headline text-xl text-primary flex items-center gap-2"><HeartPulse />Lifestyle & Health Suggestions</CardTitle>
                     </CardHeader>
                     <CardContent>
                          <ScrollArea className="h-[50vh] pr-4">

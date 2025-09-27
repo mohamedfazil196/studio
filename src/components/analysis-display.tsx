@@ -1,30 +1,58 @@
-import { FileText, Stethoscope, HeartPulse, MessagesSquare, File as FileIcon } from "lucide-react";
+import { FileText, Stethoscope, HeartPulse, MessagesSquare, File as FileIcon, AlertTriangle, ShieldCheck, ShieldAlert } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { QAChat } from "./qa-chat";
 import { ScrollArea } from "@/components/ui/scroll-area";
-
-type Analysis = {
-  doctorSummary: string;
-  patientSummary: string;
-  lifestyleSuggestions: string;
-};
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
+import { type Analysis } from "@/app/page";
 
 type AnalysisDisplayProps = {
   fileName: string;
   analysis: Analysis;
 };
 
+const severityConfig = {
+    'Normal': {
+        icon: ShieldCheck,
+        color: 'bg-green-500',
+        text: 'text-green-50',
+        label: 'Normal'
+    },
+    'Needs Attention': {
+        icon: ShieldAlert,
+        color: 'bg-yellow-500',
+        text: 'text-yellow-50',
+        label: 'Needs Attention'
+    },
+    'Immediate Action': {
+        icon: AlertTriangle,
+        color: 'bg-red-600',
+        text: 'text-red-50',
+        label: 'Immediate Action Required'
+    }
+}
+
 export function AnalysisDisplay({ fileName, analysis }: AnalysisDisplayProps) {
+  const severity = analysis.severity || 'Normal';
+  const config = severityConfig[severity];
+  const Icon = config.icon;
+
   return (
     <div className="w-full max-w-6xl mx-auto animate-fade-in">
-      <header className="mb-6 px-1">
+      <header className="mb-6 px-1 space-y-3">
         <div className="flex items-center gap-3">
           <FileIcon className="w-8 h-8 text-primary" />
           <div>
             <p className="text-sm text-muted-foreground">Analysis for</p>
             <h2 className="text-2xl font-bold font-headline text-foreground">{fileName}</h2>
           </div>
+        </div>
+        <div className="flex items-center gap-2">
+            <Badge className={cn("flex items-center gap-2 text-base px-3 py-1 border-none", config.color, config.text)}>
+                <Icon className="w-5 h-5" />
+                <span>{config.label}</span>
+            </Badge>
         </div>
       </header>
       
@@ -71,7 +99,7 @@ export function AnalysisDisplay({ fileName, analysis }: AnalysisDisplayProps) {
                             <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{analysis.lifestyleSuggestions}</p>
                         </ScrollArea>
                     </CardContent>
-                </Card>
+                </card>
             </TabsContent>
             <TabsContent value="q-and-a">
                 <QAChat reportSummary={analysis.patientSummary} />

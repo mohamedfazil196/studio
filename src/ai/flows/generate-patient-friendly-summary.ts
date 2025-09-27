@@ -18,7 +18,14 @@ export type GeneratePatientFriendlySummaryInput = z.infer<
 >;
 
 const GeneratePatientFriendlySummaryOutputSchema = z.object({
-  summary: z.string().describe('A simplified, patient-friendly summary of the medical report.'),
+  summary: z
+    .string()
+    .describe('A simplified, patient-friendly summary of the medical report.'),
+  severity: z
+    .enum(['Normal', 'Needs Attention', 'Immediate Action'])
+    .describe(
+      'The severity of the medical situation based on the report. Options are "Normal", "Needs Attention", or "Immediate Action".'
+    ),
 });
 export type GeneratePatientFriendlySummaryOutput = z.infer<
   typeof GeneratePatientFriendlySummaryOutputSchema
@@ -35,6 +42,10 @@ const prompt = ai.definePrompt({
   input: {schema: GeneratePatientFriendlySummaryInputSchema},
   output: {schema: GeneratePatientFriendlySummaryOutputSchema},
   prompt: `You are an expert medical summarizer. You will be provided with a medical report, and you will generate a simplified summary of the report for a patient to easily understand.
+  You will also assess the severity of the findings in the report. Choose one of the following severity levels:
+- "Normal": For results that are within normal ranges and show no cause for concern.
+- "Needs Attention": For results that are outside normal ranges or indicate a condition that requires follow-up, but is not an immediate emergency.
+- "Immediate Action": For results that indicate a serious or life-threatening condition requiring urgent medical attention.
 
 Medical Report:
 {{{reportData}}}`,

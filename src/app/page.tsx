@@ -11,10 +11,11 @@ import { provideLifestyleAndHealthSuggestions } from '@/ai/flows/provide-lifesty
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 
-type Analysis = {
+export type Analysis = {
   doctorSummary: string;
   patientSummary: string;
   lifestyleSuggestions: string;
+  severity: 'Normal' | 'Needs Attention' | 'Immediate Action';
 };
 
 export default function Home() {
@@ -51,6 +52,7 @@ export default function Home() {
             doctorSummary,
             patientSummary: patientSummaryResult.summary,
             lifestyleSuggestions: lifestyleSuggestionsResult.suggestions,
+            severity: patientSummaryResult.severity,
           });
           setIsProcessing(false);
         } catch (error) {

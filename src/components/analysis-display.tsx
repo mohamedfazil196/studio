@@ -99,7 +99,7 @@ export function AnalysisDisplay({ fileName, analysis }: AnalysisDisplayProps) {
                             <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{analysis.lifestyleSuggestions}</p>
                         </ScrollArea>
                     </CardContent>
-                </card>
+                </Card>
             </TabsContent>
             <TabsContent value="q-and-a">
                 <QAChat reportSummary={analysis.patientSummary} />

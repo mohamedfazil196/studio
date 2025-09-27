@@ -1,4 +1,4 @@
-import { FileText, Stethoscope, HeartPulse, MessagesSquare, File as FileIcon, AlertTriangle, ShieldCheck, ShieldAlert, Pill, Languages, Volume2, Loader2, Play, Pause } from "lucide-react";
+import { FileText, Stethoscope, HeartPulse, MessagesSquare, File as FileIcon, AlertTriangle, ShieldCheck, ShieldAlert, Pill, Languages, Volume2, Loader2, Play, Pause, BellRing } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { QAChat } from "./qa-chat";
@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { useState, useRef } from "react";
 import { translateAndSpeak } from "@/ai/flows/translate-and-speak";
 import { useToast } from "@/hooks/use-toast";
+import { Reminders } from "./reminders";
 
 type AnalysisDisplayProps = {
   fileName: string;
@@ -136,12 +137,13 @@ export function AnalysisDisplay({ fileName, analysis }: AnalysisDisplayProps) {
       </header>
       
       <Tabs defaultValue="patient-summary" className="w-full">
-        <TabsList className="grid w-full h-auto grid-cols-2 sm:grid-cols-3 md:grid-cols-5">
+        <TabsList className="grid w-full h-auto grid-cols-2 sm:grid-cols-3 md:grid-cols-6">
           <TabsTrigger value="patient-summary" className="py-2"><FileText className="w-4 h-4 mr-2" />Patient Summary</TabsTrigger>
           <TabsTrigger value="doctor-summary" className="py-2"><Stethoscope className="w-4 h-4 mr-2" />Doctor Summary</TabsTrigger>
           <TabsTrigger value="suggestions" className="py-2"><HeartPulse className="w-4 h-4 mr-2" />Suggestions</TabsTrigger>
           <TabsTrigger value="medicines" className="py-2"><Pill className="w-4 h-4 mr-2" />Medicines</TabsTrigger>
           <TabsTrigger value="q-and-a" className="py-2"><MessagesSquare className="w-4 h-4 mr-2" />Q&A</TabsTrigger>
+          <TabsTrigger value="reminders" className="py-2"><BellRing className="w-4 h-4 mr-2" />Reminders</TabsTrigger>
         </TabsList>
         
         <div className="mt-4">
@@ -221,6 +223,9 @@ export function AnalysisDisplay({ fileName, analysis }: AnalysisDisplayProps) {
             </TabsContent>
             <TabsContent value="q-and-a">
                 <QAChat reportSummary={analysis.patientSummary} />
+            </TabsContent>
+            <TabsContent value="reminders">
+                <Reminders />
             </TabsContent>
         </div>
       </Tabs>

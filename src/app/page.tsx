@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useToast } from "@/hooks/use-toast";
 import { Header } from "@/components/layout/header";
 import { FileUploader } from "@/components/file-uploader";
@@ -11,6 +11,9 @@ import { provideLifestyleAndHealthSuggestions } from '@/ai/flows/provide-lifesty
 import { recommendMedicines } from '@/ai/flows/recommend-medicines';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
+import { useFirebase } from '@/firebase';
+import { initiateAnonymousSignIn } from '@/firebase/non-blocking-login';
+import { Auth } from 'firebase/auth';
 
 export type Analysis = {
   doctorSummary: string;
@@ -25,6 +28,14 @@ export default function Home() {
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
   const { toast } = useToast();
+  const { auth, user, isUserLoading } = useFirebase();
+
+  useEffect(() => {
+    if (!isUserLoading && !user && auth) {
+      initiateAnonymousSignIn(auth as Auth);
+    }
+  }, [isUserLoading, user, auth]);
+
 
   const handleFileUpload = async (file: File) => {
     setIsProcessing(true);
@@ -110,7 +121,9 @@ export default function Home() {
     <div className="flex flex-col min-h-screen bg-background text-foreground">
       <Header />
       <main className="flex-grow flex items-center justify-center p-4">
-        {isProcessing ? (
+        {isUserLoading ? (
+            <LoadingState />
+        ) : isProcessing ? (
           <LoadingState />
         ) : analysis ? (
           <div className="w-full">

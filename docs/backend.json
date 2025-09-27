@@ -1,0 +1,199 @@
+{
+  "entities": {
+    "MedicalReport": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "MedicalReport",
+      "type": "object",
+      "description": "Stores medical reports uploaded by users for AI analysis.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the medical report."
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to the User who uploaded the report. (Relationship: User 1:N MedicalReport)"
+        },
+        "fileName": {
+          "type": "string",
+          "description": "Name of the uploaded file."
+        },
+        "fileType": {
+          "type": "string",
+          "description": "Type of the uploaded file (e.g., PDF, PNG, JPG)."
+        },
+        "uploadTimestamp": {
+          "type": "string",
+          "description": "Timestamp of when the report was uploaded.",
+          "format": "date-time"
+        },
+        "aiAnalysisResult": {
+          "type": "string",
+          "description": "The raw output result from the AI analysis of the medical report."
+        },
+        "patientFriendlySummary": {
+          "type": "string",
+          "description": "A simplified summary of the report for patients."
+        },
+        "doctorStyleSummary": {
+          "type": "string",
+          "description": "A detailed, technical summary of the report for medical professionals."
+        },
+        "lifestyleSuggestions": {
+          "type": "string",
+          "description": "Lifestyle and health recommendations based on the report findings."
+        }
+      },
+      "required": [
+        "id",
+        "userId",
+        "fileName",
+        "fileType",
+        "uploadTimestamp"
+      ]
+    },
+    "User": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "User",
+      "type": "object",
+      "description": "Stores user information.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the user."
+        },
+        "email": {
+          "type": "string",
+          "description": "User's email address.",
+          "format": "email"
+        },
+        "preferredLanguage": {
+          "type": "string",
+          "description": "Preferred language for the user (e.g., for Text-to-Speech)."
+        }
+      },
+      "required": [
+        "id",
+        "email"
+      ]
+    },
+    "MedicineReminder": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "MedicineReminder",
+      "type": "object",
+      "description": "Stores medicine reminders for patients.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the medicine reminder."
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to the User the reminder is for. (Relationship: User 1:N MedicineReminder)"
+        },
+        "medicineName": {
+          "type": "string",
+          "description": "Name of the medicine."
+        },
+        "dosage": {
+          "type": "string",
+          "description": "Dosage of the medicine."
+        },
+        "reminderTimes": {
+          "type": "array",
+          "description": "Array of reminder times for the medicine.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "timeZone": {
+          "type": "string",
+          "description": "Timezone for the reminder times."
+        },
+        "preferredLanguage": {
+          "type": "string",
+          "description": "Preferred language for voice output (overrides user's preferred language)."
+        },
+        "status": {
+          "type": "string",
+          "description": "Status of the reminder (e.g., 'pending', 'taken', 'snoozed')."
+        }
+      },
+      "required": [
+        "id",
+        "userId",
+        "medicineName",
+        "dosage",
+        "reminderTimes",
+        "timeZone"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password",
+      "anonymous"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/users/{userId}",
+        "definition": {
+          "entityName": "User",
+          "schema": {
+            "$ref": "#/backend/entities/User"
+          },
+          "description": "Stores user information.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "Unique identifier for the user."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/medical_reports/{reportId}",
+        "definition": {
+          "entityName": "MedicalReport",
+          "schema": {
+            "$ref": "#/backend/entities/MedicalReport"
+          },
+          "description": "Stores medical reports uploaded by users.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "Unique identifier for the user who uploaded the report."
+            },
+            {
+              "name": "reportId",
+              "description": "Unique identifier for the medical report."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/medicine_reminders/{reminderId}",
+        "definition": {
+          "entityName": "MedicineReminder",
+          "schema": {
+            "$ref": "#/backend/entities/MedicineReminder"
+          },
+          "description": "Stores medicine reminders for patients.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "Unique identifier for the user the reminder is for."
+            },
+            {
+              "name": "reminderId",
+              "description": "Unique identifier for the medicine reminder."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "The Firestore data structure is designed to ensure authorization independence, clarity, and scalability for the MediScan AI application, particularly for managing medicine reminders. The structure uses path-based ownership for user-specific data and denormalization to avoid complex authorization rules. \n\nUsers: User data is stored under the `/users/{userId}` path.  \n\nMedical Reports: Medical reports are stored under the `/users/{userId}/medical_reports/{reportId}` path. This ensures that each report is directly associated with a user, simplifying ownership and security rules. \n\nMedicine Reminders:  Medicine reminders are stored under the `/users/{userId}/medicine_reminders/{reminderId}` path. This structure ensures that each reminder is directly associated with a user, simplifying ownership and security rules. The `userId` is implicitly enforced in the path.\n\nAuthorization Independence (Denormalization): Access to medical reports and medicine reminders is controlled through the user ID embedded in the path.  There is no reliance on `get()` calls to parent documents for authorization, ensuring that security rules remain simple and efficient.\n\nQAPs Support (List Operations): The path-based structure (`/users/{userId}/medical_reports/{reportId}` and `/users/{userId}/medicine_reminders/{reminderId}`) enables secure and efficient `list` operations.  Rules can easily restrict access to only the medical reports or medicine reminders belonging to the authenticated user, based on the `userId` in `request.auth.uid`."
+  }
+}

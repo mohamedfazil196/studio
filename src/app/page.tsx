@@ -1,17 +1,12 @@
 
 "use client";
 
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { useFirebase } from '@/firebase';
 import { Header } from '@/components/layout/header';
 import { Button } from '@/components/ui/button';
 import { ArrowRight, FileHeart, Bot, Stethoscope, Lightbulb } from 'lucide-react';
 import Link from 'next/link';
 
 export default function Home() {
-  const { user, isUserLoading } = useFirebase();
-  const router = useRouter();
 
   const FeatureCard = ({ icon, title, description }: { icon: React.ReactNode, title: string, description: string }) => (
     <div className="bg-card/50 backdrop-blur-sm p-6 rounded-lg border border-primary/10 flex flex-col items-center text-center transform transition-transform duration-300 hover:scale-105 hover:border-primary/30">

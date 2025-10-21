@@ -11,6 +11,7 @@ import { useFirebase } from '@/firebase';
 import { initiateEmailSignIn, initiateEmailSignUp } from '@/firebase/non-blocking-login';
 import { useToast } from '@/hooks/use-toast';
 import { Auth } from 'firebase/auth';
+import Link from 'next/link';
 import './style.css';
 import { cn } from '@/lib/utils';
 
@@ -83,12 +84,12 @@ export default function LoginPage() {
   
   return (
     <div className='login-body'>
-        <div className='absolute left-8 top-8 flex items-center gap-3'>
+        <Link href="/" className='absolute left-8 top-8 flex items-center gap-3'>
              <FileHeart className="h-10 w-10 text-primary" />
              <h1 className="text-3xl font-headline font-bold text-primary">
                 MediScan AI
             </h1>
-        </div>
+        </Link>
       <div className={cn('container', isActive && 'active')}>
         <div className="curved-shape"></div>
         <div className="curved-shape2"></div>

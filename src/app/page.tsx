@@ -13,13 +13,6 @@ export default function Home() {
   const { user, isUserLoading } = useFirebase();
   const router = useRouter();
 
-  // Redirect to dashboard if user is already logged in
-  useEffect(() => {
-    if (!isUserLoading && user) {
-      router.replace('/dashboard');
-    }
-  }, [user, isUserLoading, router]);
-
   const FeatureCard = ({ icon, title, description }: { icon: React.ReactNode, title: string, description: string }) => (
     <div className="bg-card/50 backdrop-blur-sm p-6 rounded-lg border border-primary/10 flex flex-col items-center text-center transform transition-transform duration-300 hover:scale-105 hover:border-primary/30">
       <div className="bg-primary/10 p-3 rounded-full mb-4 border border-primary/20">
@@ -29,21 +22,6 @@ export default function Home() {
       <p className="text-muted-foreground text-sm">{description}</p>
     </div>
   );
-
-
-  // Render nothing or a loading spinner while checking auth state and redirecting
-  if (isUserLoading || user) {
-    return (
-        <div className="flex flex-col min-h-screen bg-background text-foreground">
-            <Header />
-            <main className="flex-grow flex items-center justify-center">
-                <div className="text-center">
-                    <p>Loading...</p>
-                </div>
-            </main>
-        </div>
-    );
-  }
 
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground">

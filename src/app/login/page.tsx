@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -52,7 +53,7 @@ export default function LoginPage() {
         title: 'Login Successful',
         description: "You're now logged in.",
       });
-      router.push('/');
+      router.push('/dashboard');
     } catch (error: any) {
       toast({
         title: 'Login Failed',
@@ -70,7 +71,7 @@ export default function LoginPage() {
         title: 'Registration Successful',
         description: "You're now logged in.",
       });
-      router.push('/');
+      router.push('/dashboard');
     } catch (error: any) {
       toast({
         title: 'Registration Failed',

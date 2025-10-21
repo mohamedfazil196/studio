@@ -1,4 +1,4 @@
-import { FileHeart, LogIn, LogOut, User as UserIcon } from "lucide-react";
+import { FileHeart, LogIn, LogOut, User as UserIcon, LayoutDashboard } from "lucide-react";
 import Link from 'next/link';
 import { useFirebase } from "@/firebase";
 import { Auth, signOut } from "firebase/auth";
@@ -25,6 +25,12 @@ export function Header() {
         <div className="flex items-center gap-4">
           {user ? (
             <>
+              <Button asChild variant="ghost" size="sm">
+                <Link href="/dashboard">
+                  <LayoutDashboard className="mr-2 h-4 w-4" />
+                  Dashboard
+                </Link>
+              </Button>
               <div className="flex items-center gap-2">
                 <UserIcon className="h-5 w-5 text-muted-foreground" />
                 <span className="text-sm text-muted-foreground">{user.email}</span>

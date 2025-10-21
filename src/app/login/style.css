@@ -5,22 +5,22 @@
     justify-content: center;
     align-items: center;
     min-height: 100vh;
-    background: #25252b;
+    background: hsl(var(--background));
     font-family: 'Poppins', sans-serif;
 }
 
 .login-body * {
     box-sizing: border-box;
     font-family: 'Poppins', sans-serif;
-    color: #fff;
+    color: hsl(var(--foreground));
 }
 
 .container{
     position: relative;
-    width: 750px;
-    height: 450px;
-    border: 2px solid #e46033;
-    box-shadow: 0 0 25px #e46033;
+    width: 850px;
+    height: 500px;
+    border: 2px solid hsl(var(--primary));
+    box-shadow: 0 0 25px hsl(var(--primary));
     overflow: hidden;
 }
 
@@ -54,7 +54,7 @@
 
 .form-box.Register{
     right: 0;
-    padding: 0 60px;
+    padding: 0 40px;
 }
 
 .form-box.Register .animation{
@@ -91,16 +91,16 @@
     border: none;
     outline: none;
     font-size: 16px;
-    color: #fff;
+    color: hsl(var(--foreground));
     font-weight: 600;
-    border-bottom: 2px solid #fff;
+    border-bottom: 2px solid hsl(var(--foreground));
     padding-right: 23px;
     transition: .5s;
 }
 
 .input-box input:focus,
 .input-box input:valid{
-    border-bottom: 2px solid #e46033;
+    border-bottom: 2px solid hsl(var(--primary));
 }
 
 .input-box label{
@@ -109,7 +109,7 @@
     left: 0;
     transform: translateY(-50%);
     font-size: 16px;
-    color: #fff;
+    color: hsl(var(--foreground));
     transition: .5s;
     pointer-events: none;
 }
@@ -117,7 +117,7 @@
 .input-box input:focus ~ label,
 .input-box input:valid ~ label{
     top: -5px;
-    color: #e46033;
+    color: hsl(var(--primary));
 }
 
 .input-box svg{
@@ -126,12 +126,12 @@
     right: 0;
     font-size: 18px;
     transform: translateY(-50%);
-    color: #fff;
+    color: hsl(var(--foreground));
 }
 
 .input-box input:focus ~ svg,
 .input-box input:valid ~ svg{
-    color: #e46033;
+    color: hsl(var(--primary));
 }
 
 .btn{
@@ -143,9 +143,14 @@
     cursor: pointer;
     font-size: 16px;
     font-weight: 600;
-    border: 2px solid #e46033;
+    border: 2px solid hsl(var(--primary));
     overflow: hidden;
     z-index: 1;    
+    color: hsl(var(--foreground));
+}
+
+.btn:hover {
+    color: hsl(var(--primary-foreground));
 }
 
 .btn::before{
@@ -153,7 +158,7 @@
     position: absolute;
     height: 300%;
     width: 100%;
-    background: linear-gradient(#25252b, #e46033, #25252b, #e46033);
+    background: linear-gradient(hsl(var(--background)), hsl(var(--primary)), hsl(var(--background)), hsl(var(--primary)));
     top: -100%;
     left: 0;
     z-index: -1;
@@ -172,7 +177,7 @@
 
 .regi-link a{
     text-decoration: none;
-    color: #e46033;
+    color: hsl(var(--primary));
     font-weight: 600;
 }
 
@@ -247,13 +252,14 @@
     position: absolute;
     right: 0;
     top: -5px;
-    height: 600px;
-    width: 850px;
-    background: linear-gradient(45deg, #25252b, #e46033);
+    height: 110%;
+    width: 110%;
+    background: linear-gradient(45deg, hsl(var(--background)), hsl(var(--primary)));
     transform: rotate(10deg) skewY(40deg);
     transform-origin: bottom right;
     transition: 1.5s ease;
-    transition-delay: 1.6s;
+    transition-delay: .5s;
+    z-index: -1;
 }
 
 .container.active .curved-shape{
@@ -263,25 +269,24 @@
 
 .container .curved-shape2{
     position: absolute;
-    left: 250px;
-    top: 100%;
-    height: 700px;
-    width: 850px;
-    background: #25252b;
-    border-top: 3px solid #e46033;
-    transform: rotate(0deg) skewY(0deg);
-    transform-origin: bottom left;
+    left: 0;
+    top: -5px;
+    height: 110%;
+    width: 110%;
+    background: hsl(var(--background));
+    transform: rotate(10deg) skewY(40deg);
+    transform-origin: top left;
     transition: 1.5s ease;
-    transition-delay: .5s;
+    z-index: -1;
 }
 
 .container.active .curved-shape2{
-    transform: rotate(-11deg) skewY(-41deg);
-    transition-delay: 1.2s;
+    transform: rotate(0deg) skewY(0deg);
+    transition-delay: .5s;
 }
 
 .error-message {
-    color: #e46033;
+    color: hsl(var(--destructive));
     font-size: 12px;
     margin-top: -20px;
     margin-bottom: 10px;

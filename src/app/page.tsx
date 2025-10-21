@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useToast } from "@/hooks/use-toast";
 import { Header } from "@/components/layout/header";
 import { FileUploader } from "@/components/file-uploader";
@@ -26,9 +27,25 @@ export default function Home() {
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
   const { toast } = useToast();
-  const { isUserLoading } = useFirebase();
+  const { user, isUserLoading } = useFirebase();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!isUserLoading && !user) {
+      router.push('/login');
+    }
+  }, [user, isUserLoading, router]);
 
   const handleFileUpload = async (file: File) => {
+    if (!user) {
+      toast({
+        title: "Authentication Required",
+        description: "Please sign in to analyze reports.",
+        variant: "destructive",
+      });
+      router.push('/login');
+      return;
+    }
     setIsProcessing(true);
     setAnalysis(null);
     setUploadedFileName(file.name);
@@ -108,13 +125,25 @@ export default function Home() {
     </div>
   );
 
+  if (isUserLoading || !user) {
+    return (
+        <div className="flex flex-col min-h-screen bg-background text-foreground">
+            <Header />
+            <main className="flex-grow flex items-center justify-center p-4">
+                <LoadingState />
+            </main>
+             <footer className="text-center p-4 text-sm text-muted-foreground">
+                <p>MediScan AI is for demonstration purposes only. Not for real medical diagnosis.</p>
+            </footer>
+        </div>
+    );
+  }
+
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground">
       <Header />
       <main className="flex-grow flex items-center justify-center p-4">
-        {isUserLoading ? (
-            <LoadingState />
-        ) : isProcessing ? (
+        { isProcessing ? (
           <LoadingState />
         ) : analysis ? (
           <div className="w-full">

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { User, Lock, Mail } from 'lucide-react';
+import { User, Lock, Mail, FileHeart } from 'lucide-react';
 import { useFirebase } from '@/firebase';
 import { initiateEmailSignIn, initiateEmailSignUp } from '@/firebase/non-blocking-login';
 import { useToast } from '@/hooks/use-toast';
@@ -82,6 +82,12 @@ export default function LoginPage() {
   
   return (
     <div className='login-body'>
+        <div className='absolute left-8 top-8 flex items-center gap-3'>
+             <FileHeart className="h-10 w-10 text-primary" />
+             <h1 className="text-3xl font-headline font-bold text-primary">
+                MediScan AI
+            </h1>
+        </div>
       <div className={cn('container', isActive && 'active')}>
         <div className="curved-shape"></div>
         <div className="curved-shape2"></div>
@@ -92,13 +98,13 @@ export default function LoginPage() {
             <div className="input-box animation" style={{ '--D': 1, '--S': 22 } as React.CSSProperties}>
               <input type="email" {...loginForm.register('email')} required />
               <label>Email</label>
-              <Mail color="gray" />
+              <Mail className="text-foreground/70" />
             </div>
              {loginForm.formState.errors.email && <p className="error-message">{loginForm.formState.errors.email.message}</p>}
             <div className="input-box animation" style={{ '--D': 2, '--S': 23 } as React.CSSProperties}>
               <input type="password" {...loginForm.register('password')} required />
               <label>Password</label>
-              <Lock color="gray" />
+              <Lock className="text-foreground/70" />
             </div>
             {loginForm.formState.errors.password && <p className="error-message">{loginForm.formState.errors.password.message}</p>}
             <div className="input-box animation" style={{ '--D': 3, '--S': 24 } as React.CSSProperties}>
@@ -121,19 +127,19 @@ export default function LoginPage() {
             <div className="input-box animation" style={{ '--li': 18, '--S': 1 } as React.CSSProperties}>
               <input type="text" {...registerForm.register('username')} required />
               <label>Username</label>
-              <User color="gray" />
+              <User className="text-foreground/70" />
             </div>
             {registerForm.formState.errors.username && <p className="error-message">{registerForm.formState.errors.username.message}</p>}
             <div className="input-box animation" style={{ '--li': 19, '--S': 2 } as React.CSSProperties}>
               <input type="email" {...registerForm.register('email')} required />
               <label>Email</label>
-              <Mail color="gray" />
+              <Mail className="text-foreground/70" />
             </div>
             {registerForm.formState.errors.email && <p className="error-message">{registerForm.formState.errors.email.message}</p>}
             <div className="input-box animation" style={{ '--li': 19, '--S': 3 } as React.CSSProperties}>
               <input type="password" {...registerForm.register('password')} required />
               <label>Password</label>
-              <Lock color="gray" />
+              <Lock className="text-foreground/70" />
             </div>
             {registerForm.formState.errors.password && <p className="error-message">{registerForm.formState.errors.password.message}</p>}
             <div className="input-box animation" style={{ '--li': 20, '--S': 4 } as React.CSSProperties}>

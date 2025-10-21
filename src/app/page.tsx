@@ -137,7 +137,7 @@ export default function Home() {
         )}
       </main>
       <footer className="text-center p-4 text-sm text-muted-foreground">
-          <p>MediScan AI is a hackathon project. Not intended for real medical diagnosis or advice.</p>
+          <p>MediScan AI is for demonstration purposes only. Not for real medical diagnosis.</p>
       </footer>
     </div>
   );

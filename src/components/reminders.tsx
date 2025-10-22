@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -8,7 +8,7 @@ import { useFirebase, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, doc } from 'firebase/firestore';
 import { addDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
@@ -97,10 +97,10 @@ export function Reminders() {
     }
 
     return (
-        <Card className="shadow-md">
+        <Card>
             <CardHeader>
                 <CardTitle className="font-headline text-xl text-primary flex items-center gap-2"><BellRing />Medicine Reminders</CardTitle>
-                <CardDescription>Add and manage your medication schedules.</CardDescription>
+                <CardDescription>Add and manage your medication schedules. Note: Push notifications are not yet implemented.</CardDescription>
             </CardHeader>
             <CardContent className="grid md:grid-cols-2 gap-8">
                 <div>
@@ -151,11 +151,11 @@ export function Reminders() {
                                 name="preferredLanguage"
                                 render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel>Preferred Language</FormLabel>
+                                    <FormLabel>Notification Language</FormLabel>
                                     <Select onValueChange={field.onChange} defaultValue={field.value}>
                                     <FormControl>
                                         <SelectTrigger>
-                                            <SelectValue placeholder="Select a language for voice output" />
+                                            <SelectValue placeholder="Select a language" />
                                         </SelectTrigger>
                                     </FormControl>
                                     <SelectContent>
@@ -186,7 +186,7 @@ export function Reminders() {
                         )}
                         <div className="space-y-4">
                         {reminders?.map((reminder) => (
-                            <Card key={reminder.id} className="flex items-center justify-between p-4 bg-muted/50">
+                            <Card key={reminder.id} className="flex items-center justify-between p-4 bg-card-foreground/5">
                                 <div className="flex items-center gap-4">
                                     <Pill className="h-6 w-6 text-primary" />
                                     <div>

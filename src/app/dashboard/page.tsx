@@ -4,7 +4,6 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useToast } from "@/hooks/use-toast";
-import { Header } from "@/components/layout/header";
 import { FileUploader } from "@/components/file-uploader";
 import { AnalysisDisplay } from "@/components/analysis-display";
 import { generateDoctorStyleSummary } from '@/ai/flows/generate-doctor-style-summary';
@@ -14,9 +13,16 @@ import { recommendMedicines } from '@/ai/flows/recommend-medicines';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { useFirebase } from '@/firebase';
-import { User as UserIcon } from 'lucide-react';
+import { User as UserIcon, LayoutDashboard, BarChart2, FileText, Bot } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+} from "@/components/ui/chart"
+import { BarChart, CartesianGrid, XAxis, Bar, PieChart, Pie, Cell } from "recharts"
+
 
 export type Analysis = {
   doctorSummary: string;
@@ -26,10 +32,33 @@ export type Analysis = {
   medicines: string;
 };
 
+const chartData = [
+  { month: "January", reports: 186 },
+  { month: "February", reports: 305 },
+  { month: "March", reports: 237 },
+  { month: "April", reports: 73 },
+  { month: "May", reports: 209 },
+  { month: "June", reports: 214 },
+]
+
+const chartConfig = {
+  reports: {
+    label: "Reports",
+    color: "hsl(var(--chart-1))",
+  },
+}
+
+const pieChartData = [
+    { name: 'Normal', value: 7, fill: 'hsl(var(--chart-2))' },
+    { name: 'Attention', value: 2, fill: 'hsl(var(--chart-3))' },
+    { name: 'Urgent', value: 1, fill: 'hsl(var(--chart-4))' },
+]
+
 export default function DashboardPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
+  const [reportCount, setReportCount] = useState(0);
   const { toast } = useToast();
   const { user, isUserLoading } = useFirebase();
   const router = useRouter();
@@ -81,6 +110,7 @@ export default function DashboardPage() {
             severity: patientSummaryResult.severity,
             medicines: medicinesResult.medicines,
           });
+          setReportCount(prev => prev + 1);
           setIsProcessing(false);
         } catch (error) {
           console.error("Analysis Error (inner):", error);
@@ -113,7 +143,7 @@ export default function DashboardPage() {
   }
   
   const DashboardSkeleton = () => (
-    <div className="w-full max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
+    <div className="grid gap-8">
         <div className="flex items-center gap-4">
             <Skeleton className="h-16 w-16 rounded-full" />
             <div className='space-y-2'>
@@ -121,30 +151,50 @@ export default function DashboardPage() {
                 <Skeleton className="h-4 w-64" />
             </div>
         </div>
-        <Skeleton className="h-80 w-full" />
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <Skeleton className="h-48 w-full" />
+            <Skeleton className="h-48 w-full" />
+            <Skeleton className="h-48 w-full" />
+        </div>
+        <Skeleton className="h-96 w-full" />
     </div>
   );
 
   if (isUserLoading || !user) {
     return (
-        <div className="flex flex-col min-h-screen bg-background text-foreground">
-            <Header />
-            <main className="flex-grow flex items-center justify-center p-4">
-                <DashboardSkeleton />
-            </main>
-             <footer className="text-center p-4 text-sm text-muted-foreground">
-                <p>MediScan AI is for demonstration purposes only. Not for real medical diagnosis.</p>
-            </footer>
+        <div className="p-4 sm:p-6 lg:p-8">
+            <DashboardSkeleton />
         </div>
     );
   }
 
+  if (isProcessing) {
+      return (
+         <div className="w-full max-w-2xl mx-auto p-8 space-y-6 flex flex-col items-center justify-center min-h-[70vh]">
+            <Bot className="w-24 h-24 text-primary animate-pulse" />
+            <h2 className="text-2xl font-headline font-bold mt-4">Analyzing Your Report...</h2>
+            <p className="text-center text-muted-foreground">The AI is working its magic. This may take a moment.</p>
+            <Skeleton className="h-4 w-3/4 mt-8" />
+            <Skeleton className="h-4 w-1/2 mt-2" />
+        </div>
+      )
+  }
+
+  if (analysis) {
+      return (
+        <div className="w-full">
+          <AnalysisDisplay fileName={uploadedFileName!} analysis={analysis} />
+          <div className="text-center mt-8">
+              <Button variant="outline" onClick={handleReset}>Analyze Another Report</Button>
+          </div>
+        </div>
+      );
+  }
+
   return (
-    <div className="max-w-7xl mx-auto">
-      {!analysis && !isProcessing && (
-        <div className="mb-8">
-          <Card className='bg-card/50 border-primary/20 p-6'>
-              <div className="flex items-center gap-4">
+    <div className="space-y-8 animate-fade-in">
+        <div className="flex flex-col md:flex-row justify-between items-start gap-4">
+             <div className="flex items-center gap-4">
                   <Avatar className="h-16 w-16 border-2 border-primary">
                       <AvatarImage src={user.photoURL ?? undefined} alt={user.displayName ?? "User"} />
                       <AvatarFallback className="bg-primary text-primary-foreground">
@@ -152,39 +202,63 @@ export default function DashboardPage() {
                       </AvatarFallback>
                   </Avatar>
                   <div>
-                      <h1 className="text-2xl font-bold font-headline">Welcome back, {user.displayName || user.email}!</h1>
-                      <p className="text-muted-foreground">Ready to analyze a new report?</p>
+                      <h1 className="text-3xl font-bold font-headline">Welcome, {user.displayName || user.email}!</h1>
+                      <p className="text-muted-foreground">Here is your health overview. Ready to analyze a new report?</p>
                   </div>
               </div>
-          </Card>
-        </div>
-      )}
-
-      {isProcessing ? (
-         <div className="w-full max-w-2xl mx-auto p-8 space-y-6">
-            <div className="flex items-center gap-4">
-                <Skeleton className="h-12 w-12 rounded-full" />
-                <div className='space-y-2'>
-                    <Skeleton className="h-6 w-72" />
-                    <Skeleton className="h-4 w-48" />
-                </div>
+              <div className="text-right">
+                <p className="text-sm text-muted-foreground">Reports Analyzed</p>
+                <p className="text-4xl font-bold text-primary">{reportCount}</p>
             </div>
-            <div className="space-y-4 pt-4">
-                <Skeleton className="h-10 w-full" />
-                <Skeleton className="h-64 w-full rounded-lg" />
-            </div>
-            <p className="text-center text-muted-foreground animate-pulse">Analyzing your report... this may take a moment.</p>
         </div>
-      ) : analysis ? (
-        <div className="w-full">
-          <AnalysisDisplay fileName={uploadedFileName!} analysis={analysis} />
-          <div className="text-center mt-8">
-              <Button variant="outline" onClick={handleReset}>Analyze Another Report</Button>
-          </div>
+        
+        <div className="grid md:grid-cols-1 lg:grid-cols-3 gap-6">
+            <main className="lg:col-span-2">
+                 <FileUploader onFileUpload={handleFileUpload} />
+            </main>
+            <aside className="space-y-6">
+                <Card>
+                    <CardHeader>
+                        <CardTitle className='font-headline text-primary'>Analysis History</CardTitle>
+                        <CardDescription>Breakdown of recent report results.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="flex justify-center items-center">
+                         <ChartContainer config={{}} className="h-[200px] w-full">
+                            <PieChart>
+                                <ChartTooltip content={<ChartTooltipContent hideLabel />} />
+                                <Pie data={pieChartData} dataKey="value" nameKey="name" innerRadius={50}>
+                                </Pie>
+                            </PieChart>
+                        </ChartContainer>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader>
+                        <CardTitle className='font-headline text-primary'>Monthly Usage</CardTitle>
+                        <CardDescription>Reports analyzed per month.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <ChartContainer config={chartConfig} className="h-[200px] w-full">
+                            <BarChart accessibilityLayer data={chartData}>
+                                <CartesianGrid vertical={false} />
+                                <XAxis
+                                dataKey="month"
+                                tickLine={false}
+                                tickMargin={10}
+                                axisLine={false}
+                                tickFormatter={(value) => value.slice(0, 3)}
+                                />
+                                <ChartTooltip
+                                cursor={false}
+                                content={<ChartTooltipContent hideLabel />}
+                                />
+                                <Bar dataKey="reports" fill="var(--color-reports)" radius={8} />
+                            </BarChart>
+                        </ChartContainer>
+                    </CardContent>
+                </Card>
+            </aside>
         </div>
-      ) : (
-        <FileUploader onFileUpload={handleFileUpload} />
-      )}
     </div>
   );
 }

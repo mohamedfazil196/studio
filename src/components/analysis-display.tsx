@@ -1,11 +1,11 @@
-import { FileText, Stethoscope, HeartPulse, MessagesSquare, File as FileIcon, AlertTriangle, ShieldCheck, ShieldAlert, Pill, Languages, Volume2, Loader2, Play, Pause, BellRing } from "lucide-react";
+import { FileText, Stethoscope, HeartPulse, MessagesSquare, File as FileIcon, AlertTriangle, ShieldCheck, ShieldAlert, Pill, Languages, Play, Pause, BellRing, Loader2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { QAChat } from "./qa-chat";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { type Analysis } from "@/app/page";
+import { type Analysis } from "@/app/dashboard/page";
 import { Button } from "./ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { useState, useRef } from "react";
@@ -21,20 +21,17 @@ type AnalysisDisplayProps = {
 const severityConfig = {
     'Normal': {
         icon: ShieldCheck,
-        color: 'bg-green-500',
-        text: 'text-green-50',
+        color: 'bg-green-500/10 border-green-500 text-green-400',
         label: 'Normal'
     },
     'Needs Attention': {
         icon: ShieldAlert,
-        color: 'bg-yellow-500',
-        text: 'text-yellow-50',
+        color: 'bg-yellow-500/10 border-yellow-500 text-yellow-400',
         label: 'Needs Attention'
     },
     'Immediate Action': {
         icon: AlertTriangle,
-        color: 'bg-red-600',
-        text: 'text-red-50',
+        color: 'bg-red-600/10 border-red-500 text-red-500',
         label: 'Immediate Action Required'
     }
 }
@@ -119,7 +116,7 @@ export function AnalysisDisplay({ fileName, analysis }: AnalysisDisplayProps) {
 
 
   return (
-    <div className="w-full max-w-6xl mx-auto animate-fade-in">
+    <div className="w-full max-w-7xl mx-auto animate-fade-in">
       <header className="mb-6 px-1 space-y-3">
         <div className="flex items-center gap-3">
           <FileIcon className="w-8 h-8 text-primary" />
@@ -129,7 +126,7 @@ export function AnalysisDisplay({ fileName, analysis }: AnalysisDisplayProps) {
           </div>
         </div>
         <div className="flex items-center gap-2">
-            <Badge className={cn("flex items-center gap-2 text-base px-3 py-1 border-none", config.color, config.text)}>
+            <Badge variant="outline" className={cn("flex items-center gap-2 text-base px-3 py-1", config.color)}>
                 <Icon className="w-5 h-5" />
                 <span>{config.label}</span>
             </Badge>
@@ -148,7 +145,7 @@ export function AnalysisDisplay({ fileName, analysis }: AnalysisDisplayProps) {
         
         <div className="mt-4">
             <TabsContent value="patient-summary">
-                <Card className="shadow-md">
+                <Card>
                     <CardHeader>
                         <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
                             <CardTitle className="font-headline text-xl text-primary flex items-center gap-2"><FileText />Patient-Friendly Summary</CardTitle>
@@ -178,45 +175,45 @@ export function AnalysisDisplay({ fileName, analysis }: AnalysisDisplayProps) {
                                     <Loader2 className="w-8 h-8 animate-spin text-primary" />
                                 </div>
                             ) : (
-                                <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{translatedSummary}</p>
+                                <p className="text-foreground/90 whitespace-pre-wrap leading-relaxed">{translatedSummary}</p>
                             )}
                         </ScrollArea>
                     </CardContent>
                 </Card>
             </TabsContent>
             <TabsContent value="doctor-summary">
-                <Card className="shadow-md">
+                <Card>
                     <CardHeader>
                         <CardTitle className="font-headline text-xl text-primary flex items-center gap-2"><Stethoscope />Doctor-Style Summary</CardTitle>
                     </CardHeader>
                     <CardContent>
                         <ScrollArea className="h-[50vh] pr-4">
-                            <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{analysis.doctorSummary}</p>
+                            <p className="text-foreground/90 whitespace-pre-wrap leading-relaxed font-code">{analysis.doctorSummary}</p>
                         </ScrollArea>
                     </CardContent>
                 </Card>
             </TabsContent>
             <TabsContent value="suggestions">
-                <Card className="shadow-md">
+                <Card>
                     <CardHeader>
                         <CardTitle className="font-headline text-xl text-primary flex items-center gap-2"><HeartPulse />Lifestyle & Health Suggestions</CardTitle>
                     </CardHeader>
                     <CardContent>
                          <ScrollArea className="h-[50vh] pr-4">
-                            <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{analysis.lifestyleSuggestions}</p>
+                            <p className="text-foreground/90 whitespace-pre-wrap leading-relaxed">{analysis.lifestyleSuggestions}</p>
                         </ScrollArea>
                     </CardContent>
                 </Card>
             </TabsContent>
             <TabsContent value="medicines">
-                <Card className="shadow-md">
+                <Card>
                     <CardHeader>
                         <CardTitle className="font-headline text-xl text-primary flex items-center gap-2"><Pill />Recommended Medicines</CardTitle>
                         <CardDescription>This is not medical advice. Consult a doctor before taking any medication.</CardDescription>
                     </CardHeader>
                     <CardContent>
                          <ScrollArea className="h-[50vh] pr-4">
-                            <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{analysis.medicines}</p>
+                            <p className="text-foreground/90 whitespace-pre-wrap leading-relaxed">{analysis.medicines}</p>
                         </ScrollArea>
                     </CardContent>
                 </Card>

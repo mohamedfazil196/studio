@@ -198,25 +198,29 @@ export function AnalysisDisplay({ fileName, analysis }: AnalysisDisplayProps) {
         </AnalysisCard>
          <AnalysisCard icon={<Pill />} title="Recommended Medicines">
             <>
-              <p className="text-sm text-yellow-400 border border-yellow-400/50 bg-yellow-500/10 p-3 rounded-md mb-4">
-                {analysis.medicines.disclaimer}
-              </p>
-               <ul className="space-y-4">
-                {analysis.medicines.recommendations.map((med, index) => (
-                    <li key={index} className="flex flex-col border-l-2 border-primary pl-4">
-                        <span className="font-bold text-base">{med.medicineName}</span>
-                        <span className="text-sm text-muted-foreground">{med.reason}</span>
-                    </li>
-                ))}
-              </ul>
-              <div className="mt-6 text-center">
-                 <Button asChild>
-                    <Link href="/dashboard/reminders">
-                        <BellRing className="mr-2 h-4 w-4" />
-                        Set Medicine Reminders
-                    </Link>
-                </Button>
-              </div>
+              {analysis.medicines && (
+                <>
+                  <p className="text-sm text-yellow-400 border border-yellow-400/50 bg-yellow-500/10 p-3 rounded-md mb-4">
+                    {analysis.medicines.disclaimer}
+                  </p>
+                  <ul className="space-y-4">
+                    {analysis.medicines.recommendations.map((med, index) => (
+                        <li key={index} className="flex flex-col border-l-2 border-primary pl-4">
+                            <span className="font-bold text-base">{med.medicineName}</span>
+                            <span className="text-sm text-muted-foreground">{med.reason}</span>
+                        </li>
+                    ))}
+                  </ul>
+                  <div className="mt-6 text-center">
+                     <Button asChild>
+                        <Link href="/dashboard/reminders">
+                            <BellRing className="mr-2 h-4 w-4" />
+                            Set Medicine Reminders
+                        </Link>
+                    </Button>
+                  </div>
+                </>
+              )}
             </>
         </AnalysisCard>
       </div>

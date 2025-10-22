@@ -23,14 +23,20 @@ const RecommendMedicinesOutputSchema = z.object({
   disclaimer: z
     .string()
     .describe('A clear disclaimer that this is not medical advice.'),
-  recommendations: z.array(
-    z.object({
-      medicineName: z.string().describe('The name of the recommended medicine.'),
-      reason: z
-        .string()
-        .describe('The reason or condition for which this medicine is recommended.'),
-    })
-  ).describe('A list of recommended medicines.'),
+  recommendations: z
+    .array(
+      z.object({
+        medicineName: z
+          .string()
+          .describe('The name of the recommended medicine.'),
+        reason: z
+          .string()
+          .describe(
+            'The reason or condition for which this medicine is recommended.'
+          ),
+      })
+    )
+    .describe('A list of recommended medicines.'),
 });
 export type RecommendMedicinesOutput = z.infer<
   typeof RecommendMedicinesOutputSchema
@@ -63,6 +69,13 @@ const recommendMedicinesFlow = ai.defineFlow(
   },
   async input => {
     const {output} = await prompt(input);
-    return output!;
+    if (!output) {
+      return {
+        disclaimer:
+          'AI analysis could not be completed. Please consult a medical professional.',
+        recommendations: [],
+      };
+    }
+    return output;
   }
 );

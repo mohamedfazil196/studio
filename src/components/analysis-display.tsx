@@ -1,4 +1,3 @@
-
 import { FileText, Stethoscope, HeartPulse, MessagesSquare, File as FileIcon, AlertTriangle, ShieldCheck, ShieldAlert, Pill, Languages, Play, Pause, BellRing, Loader2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -198,11 +197,13 @@ export function AnalysisDisplay({ fileName, analysis }: AnalysisDisplayProps) {
         </AnalysisCard>
          <AnalysisCard icon={<Pill />} title="Recommended Medicines">
             <>
-              {analysis.medicines && (
+              {analysis.medicines && analysis.medicines.disclaimer && (
+                <p className="text-sm text-yellow-400 border border-yellow-400/50 bg-yellow-500/10 p-3 rounded-md mb-4">
+                  {analysis.medicines.disclaimer}
+                </p>
+              )}
+              {analysis.medicines && analysis.medicines.recommendations && analysis.medicines.recommendations.length > 0 && (
                 <>
-                  <p className="text-sm text-yellow-400 border border-yellow-400/50 bg-yellow-500/10 p-3 rounded-md mb-4">
-                    {analysis.medicines.disclaimer}
-                  </p>
                   <ul className="space-y-4">
                     {analysis.medicines.recommendations.map((med, index) => (
                         <li key={index} className="flex flex-col border-l-2 border-primary pl-4">

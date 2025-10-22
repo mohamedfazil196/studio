@@ -1,17 +1,16 @@
+
 import { FileText, Stethoscope, HeartPulse, MessagesSquare, File as FileIcon, AlertTriangle, ShieldCheck, ShieldAlert, Pill, Languages, Play, Pause, BellRing, Loader2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { QAChat } from "./qa-chat";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { type Analysis } from "@/app/dashboard/page";
+import { type Analysis } from "@/app/types/analysis";
 import { Button } from "./ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { useState, useRef } from "react";
 import { translateAndSpeak } from "@/ai/flows/translate-and-speak";
 import { useToast } from "@/hooks/use-toast";
-import { Reminders } from "./reminders";
+import { ScrollArea } from "./ui/scroll-area";
+import Link from 'next/link';
 
 type AnalysisDisplayProps = {
   fileName: string;
@@ -93,10 +92,14 @@ export function AnalysisDisplay({ fileName, analysis }: AnalysisDisplayProps) {
   const handlePlayPause = async () => {
     if (!audioRef.current) {
         if (selectedLanguage === 'en') {
-            audioRef.current = new Audio();
-        } else {
-            await handleLanguageChange(selectedLanguage);
+             toast({
+              title: "Audio not ready",
+              description: "Please select a language other than English to generate audio.",
+              variant: "destructive"
+          });
+          return;
         }
+        await handleLanguageChange(selectedLanguage);
     }
 
     if (audioRef.current) {
@@ -107,16 +110,34 @@ export function AnalysisDisplay({ fileName, analysis }: AnalysisDisplayProps) {
             if(!audioRef.current.src){
                 await handleLanguageChange(selectedLanguage);
             }
-            audioRef.current.play();
+            audioRef.current.play().catch(e => {
+                toast({ title: "Playback Error", description: "Could not play audio.", variant: "destructive" });
+                console.error(e);
+            });
             setIsPlaying(true);
             audioRef.current.onended = () => setIsPlaying(false);
         }
     }
   };
 
+  const AnalysisCard = ({ icon, title, children }: { icon: React.ReactNode, title: string, children: React.ReactNode }) => (
+    <Card className="h-full">
+        <CardHeader>
+            <CardTitle className="font-headline text-xl text-primary flex items-center gap-2">{icon}{title}</CardTitle>
+        </CardHeader>
+        <CardContent>
+            <ScrollArea className="h-[40vh] pr-4">
+                <div className="text-foreground/90 whitespace-pre-wrap leading-relaxed">
+                  {children}
+                </div>
+            </ScrollArea>
+        </CardContent>
+    </Card>
+  )
+
 
   return (
-    <div className="w-full max-w-7xl mx-auto animate-fade-in">
+    <div className="w-full max-w-7xl mx-auto animate-fade-in space-y-6">
       <header className="mb-6 px-1 space-y-3">
         <div className="flex items-center gap-3">
           <FileIcon className="w-8 h-8 text-primary" />
@@ -133,99 +154,65 @@ export function AnalysisDisplay({ fileName, analysis }: AnalysisDisplayProps) {
         </div>
       </header>
       
-      <Tabs defaultValue="patient-summary" className="w-full">
-        <TabsList className="grid w-full h-auto grid-cols-2 sm:grid-cols-3 md:grid-cols-6">
-          <TabsTrigger value="patient-summary" className="py-2"><FileText className="w-4 h-4 mr-2" />Patient Summary</TabsTrigger>
-          <TabsTrigger value="doctor-summary" className="py-2"><Stethoscope className="w-4 h-4 mr-2" />Doctor Summary</TabsTrigger>
-          <TabsTrigger value="suggestions" className="py-2"><HeartPulse className="w-4 h-4 mr-2" />Suggestions</TabsTrigger>
-          <TabsTrigger value="medicines" className="py-2"><Pill className="w-4 h-4 mr-2" />Medicines</TabsTrigger>
-          <TabsTrigger value="q-and-a" className="py-2"><MessagesSquare className="w-4 h-4 mr-2" />Q&A</TabsTrigger>
-          <TabsTrigger value="reminders" className="py-2"><BellRing className="w-4 h-4 mr-2" />Reminders</TabsTrigger>
-        </TabsList>
-        
-        <div className="mt-4">
-            <TabsContent value="patient-summary">
-                <Card>
-                    <CardHeader>
-                        <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
-                            <CardTitle className="font-headline text-xl text-primary flex items-center gap-2"><FileText />Patient-Friendly Summary</CardTitle>
-                            <div className="flex items-center gap-2">
-                                <Select onValueChange={handleLanguageChange} defaultValue="en">
-                                    <SelectTrigger className="w-[180px]">
-                                        <Languages className="w-4 h-4 mr-2" />
-                                        <SelectValue placeholder="Language" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {languages.map(lang => (
-                                            <SelectItem key={lang.code} value={lang.code}>{lang.name}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                                <Button size="icon" variant="outline" onClick={handlePlayPause} disabled={isTranslating}>
-                                    {isTranslating ? <Loader2 className="animate-spin" /> : isPlaying ? <Pause /> : <Play />}
-                                    <span className="sr-only">Play or pause summary</span>
-                                </Button>
-                            </div>
+      <div className="grid lg:grid-cols-2 gap-6">
+        <Card>
+            <CardHeader>
+                <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
+                    <CardTitle className="font-headline text-xl text-primary flex items-center gap-2"><FileText />Patient-Friendly Summary</CardTitle>
+                    <div className="flex items-center gap-2">
+                        <Select onValueChange={handleLanguageChange} defaultValue="en">
+                            <SelectTrigger className="w-[180px]">
+                                <Languages className="w-4 h-4 mr-2" />
+                                <SelectValue placeholder="Language" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {languages.map(lang => (
+                                    <SelectItem key={lang.code} value={lang.code}>{lang.name}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <Button size="icon" variant="outline" onClick={handlePlayPause} disabled={isTranslating}>
+                            {isTranslating ? <Loader2 className="animate-spin" /> : isPlaying ? <Pause /> : <Play />}
+                            <span className="sr-only">Play or pause summary</span>
+                        </Button>
+                    </div>
+                </div>
+            </CardHeader>
+            <CardContent>
+                <ScrollArea className="h-[40vh] pr-4">
+                    {isTranslating ? (
+                        <div className="flex items-center justify-center h-full">
+                            <Loader2 className="w-8 h-8 animate-spin text-primary" />
                         </div>
-                    </CardHeader>
-                    <CardContent>
-                        <ScrollArea className="h-[50vh] pr-4">
-                            {isTranslating ? (
-                                <div className="flex items-center justify-center h-full">
-                                    <Loader2 className="w-8 h-8 animate-spin text-primary" />
-                                </div>
-                            ) : (
-                                <p className="text-foreground/90 whitespace-pre-wrap leading-relaxed">{translatedSummary}</p>
-                            )}
-                        </ScrollArea>
-                    </CardContent>
-                </Card>
-            </TabsContent>
-            <TabsContent value="doctor-summary">
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="font-headline text-xl text-primary flex items-center gap-2"><Stethoscope />Doctor-Style Summary</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <ScrollArea className="h-[50vh] pr-4">
-                            <p className="text-foreground/90 whitespace-pre-wrap leading-relaxed font-code">{analysis.doctorSummary}</p>
-                        </ScrollArea>
-                    </CardContent>
-                </Card>
-            </TabsContent>
-            <TabsContent value="suggestions">
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="font-headline text-xl text-primary flex items-center gap-2"><HeartPulse />Lifestyle & Health Suggestions</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                         <ScrollArea className="h-[50vh] pr-4">
-                            <p className="text-foreground/90 whitespace-pre-wrap leading-relaxed">{analysis.lifestyleSuggestions}</p>
-                        </ScrollArea>
-                    </CardContent>
-                </Card>
-            </TabsContent>
-            <TabsContent value="medicines">
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="font-headline text-xl text-primary flex items-center gap-2"><Pill />Recommended Medicines</CardTitle>
-                        <CardDescription>This is not medical advice. Consult a doctor before taking any medication.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                         <ScrollArea className="h-[50vh] pr-4">
-                            <p className="text-foreground/90 whitespace-pre-wrap leading-relaxed">{analysis.medicines}</p>
-                        </ScrollArea>
-                    </CardContent>
-                </Card>
-            </TabsContent>
-            <TabsContent value="q-and-a">
-                <QAChat reportSummary={analysis.patientSummary} />
-            </TabsContent>
-            <TabsContent value="reminders">
-                <Reminders />
-            </TabsContent>
-        </div>
-      </Tabs>
+                    ) : (
+                        <p className="text-foreground/90 whitespace-pre-wrap leading-relaxed">{translatedSummary}</p>
+                    )}
+                </ScrollArea>
+            </CardContent>
+        </Card>
+        <AnalysisCard icon={<Stethoscope />} title="Doctor-Style Summary">
+            <p className="font-code">{analysis.doctorSummary}</p>
+        </AnalysisCard>
+        <AnalysisCard icon={<HeartPulse />} title="Lifestyle & Health Suggestions">
+            <p>{analysis.lifestyleSuggestions}</p>
+        </AnalysisCard>
+         <AnalysisCard icon={<Pill />} title="Recommended Medicines">
+            <>
+              <p className="text-sm text-yellow-400 border border-yellow-400/50 bg-yellow-500/10 p-3 rounded-md mb-4">
+                This is not medical advice. Consult a doctor before taking any medication.
+              </p>
+              <p>{analysis.medicines}</p>
+              <div className="mt-6 text-center">
+                 <Button asChild>
+                    <Link href="/dashboard/reminders">
+                        <BellRing className="mr-2 h-4 w-4" />
+                        Set Medicine Reminders
+                    </Link>
+                </Button>
+              </div>
+            </>
+        </AnalysisCard>
+      </div>
     </div>
   );
 }

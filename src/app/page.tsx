@@ -1,7 +1,6 @@
 
 "use client";
 
-import { Header } from '@/components/layout/header';
 import { Button } from '@/components/ui/button';
 import { ArrowRight, FileHeart, Bot, Stethoscope, Lightbulb } from 'lucide-react';
 import Link from 'next/link';
@@ -20,7 +19,23 @@ export default function Home() {
 
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground">
-      <Header />
+      <header className="py-4 px-4 sm:px-6 lg:px-8 border-b border-border bg-background/80 backdrop-blur-sm sticky top-0 z-40 shadow-sm">
+        <div className="mx-auto flex items-center justify-between max-w-7xl">
+            <Link href="/" className="flex items-center gap-3">
+            <FileHeart className="h-8 w-8 text-primary" />
+            <h1 className="text-2xl font-headline font-bold text-primary">
+                MediScan AI
+            </h1>
+            </Link>
+            <div className="flex items-center gap-4">
+                <Button asChild>
+                    <Link href="/login">
+                        Get Started
+                    </Link>
+                </Button>
+            </div>
+        </div>
+      </header>
       <main className="flex-grow">
         {/* Hero Section */}
         <section className="text-center py-20 lg:py-32 px-4 relative overflow-hidden">

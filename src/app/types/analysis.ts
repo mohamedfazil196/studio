@@ -1,8 +1,10 @@
 
+import { type RecommendMedicinesOutput } from "@/ai/flows/recommend-medicines";
+
 export type Analysis = {
   doctorSummary: string;
   patientSummary: string;
   lifestyleSuggestions: string;
   severity: 'Normal' | 'Needs Attention' | 'Immediate Action';
-  medicines: string;
+  medicines: RecommendMedicinesOutput;
 };

@@ -199,9 +199,16 @@ export function AnalysisDisplay({ fileName, analysis }: AnalysisDisplayProps) {
          <AnalysisCard icon={<Pill />} title="Recommended Medicines">
             <>
               <p className="text-sm text-yellow-400 border border-yellow-400/50 bg-yellow-500/10 p-3 rounded-md mb-4">
-                This is not medical advice. Consult a doctor before taking any medication.
+                {analysis.medicines.disclaimer}
               </p>
-              <p>{analysis.medicines}</p>
+               <ul className="space-y-4">
+                {analysis.medicines.recommendations.map((med, index) => (
+                    <li key={index} className="flex flex-col border-l-2 border-primary pl-4">
+                        <span className="font-bold text-base">{med.medicineName}</span>
+                        <span className="text-sm text-muted-foreground">{med.reason}</span>
+                    </li>
+                ))}
+              </ul>
               <div className="mt-6 text-center">
                  <Button asChild>
                     <Link href="/dashboard/reminders">

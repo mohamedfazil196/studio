@@ -20,11 +20,17 @@ export type RecommendMedicinesInput = z.infer<
 >;
 
 const RecommendMedicinesOutputSchema = z.object({
-  medicines: z
+  disclaimer: z
     .string()
-    .describe(
-      'A list of recommended medicines based on the medical report summary, including a disclaimer.'
-    ),
+    .describe('A clear disclaimer that this is not medical advice.'),
+  recommendations: z.array(
+    z.object({
+      medicineName: z.string().describe('The name of the recommended medicine.'),
+      reason: z
+        .string()
+        .describe('The reason or condition for which this medicine is recommended.'),
+    })
+  ).describe('A list of recommended medicines.'),
 });
 export type RecommendMedicinesOutput = z.infer<
   typeof RecommendMedicinesOutputSchema
@@ -41,12 +47,12 @@ const prompt = ai.definePrompt({
   input: {schema: RecommendMedicinesInputSchema},
   output: {schema: RecommendMedicinesOutputSchema},
   prompt: `You are a medical expert. Based on the following medical report summary, suggest relevant medicines.
-IMPORTANT: You must include a clear disclaimer that these are only suggestions and the user must consult a qualified doctor before taking any medication.
+You will provide a list of medicines and the reason for each recommendation.
+You MUST also include a clear disclaimer that these are only suggestions and the user must consult a qualified doctor before taking any medication.
 
 Medical Report Summary:
 {{{reportSummary}}}
-
-Recommended Medicines:`,
+`,
 });
 
 const recommendMedicinesFlow = ai.defineFlow(

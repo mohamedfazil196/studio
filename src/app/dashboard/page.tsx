@@ -13,7 +13,7 @@ import { recommendMedicines } from '@/ai/flows/recommend-medicines';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { useFirebase } from '@/firebase';
-import { User as UserIcon, LayoutDashboard, BarChart2, FileText, Bot } from 'lucide-react';
+import { User as UserIcon, Bot } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import {
@@ -21,7 +21,7 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from "@/components/ui/chart"
-import { BarChart, CartesianGrid, XAxis, Bar, PieChart, Pie, Cell } from "recharts"
+import { BarChart, CartesianGrid, XAxis, Bar, PieChart, Pie } from "recharts"
 
 
 export type Analysis = {
@@ -33,12 +33,12 @@ export type Analysis = {
 };
 
 const chartData = [
-  { month: "January", reports: 186 },
-  { month: "February", reports: 305 },
-  { month: "March", reports: 237 },
-  { month: "April", reports: 73 },
-  { month: "May", reports: 209 },
-  { month: "June", reports: 214 },
+  { month: "January", reports: 18 },
+  { month: "February", reports: 35 },
+  { month: "March", reports: 23 },
+  { month: "April", reports: 7 },
+  { month: "May", reports: 20 },
+  { month: "June", reports: 21 },
 ]
 
 const chartConfig = {
@@ -49,9 +49,9 @@ const chartConfig = {
 }
 
 const pieChartData = [
-    { name: 'Normal', value: 7, fill: 'hsl(var(--chart-2))' },
-    { name: 'Attention', value: 2, fill: 'hsl(var(--chart-3))' },
-    { name: 'Urgent', value: 1, fill: 'hsl(var(--chart-4))' },
+    { name: 'Normal', value: 70, fill: 'hsl(var(--chart-2))' },
+    { name: 'Attention', value: 20, fill: 'hsl(var(--chart-3))' },
+    { name: 'Urgent', value: 10, fill: 'hsl(var(--chart-4))' },
 ]
 
 export default function DashboardPage() {
@@ -206,10 +206,10 @@ export default function DashboardPage() {
                       <p className="text-muted-foreground">Here is your health overview. Ready to analyze a new report?</p>
                   </div>
               </div>
-              <div className="text-right">
-                <p className="text-sm text-muted-foreground">Reports Analyzed</p>
-                <p className="text-4xl font-bold text-primary">{reportCount}</p>
-            </div>
+              <Card className="p-4 bg-card/50">
+                  <p className="text-sm text-muted-foreground">Reports Analyzed</p>
+                  <p className="text-4xl font-bold text-primary">{reportCount}</p>
+              </Card>
         </div>
         
         <div className="grid md:grid-cols-1 lg:grid-cols-3 gap-6">
@@ -226,7 +226,32 @@ export default function DashboardPage() {
                          <ChartContainer config={{}} className="h-[200px] w-full">
                             <PieChart>
                                 <ChartTooltip content={<ChartTooltipContent hideLabel />} />
-                                <Pie data={pieChartData} dataKey="value" nameKey="name" innerRadius={50}>
+                                <Pie data={pieChartData} dataKey="value" nameKey="name" innerRadius={50} labelLine={false} label={({
+                                    cx,
+                                    cy,
+                                    midAngle,
+                                    innerRadius,
+                                    outerRadius,
+                                    percent,
+                                  }) => {
+                                    const RADIAN = Math.PI / 180;
+                                    const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+                                    const x = cx + radius * Math.cos(-midAngle * RADIAN);
+                                    const y = cy + radius * Math.sin(-midAngle * RADIAN);
+
+                                    return (
+                                      <text
+                                        x={x}
+                                        y={y}
+                                        fill="white"
+                                        textAnchor={x > cx ? 'start' : 'end'}
+                                        dominantBaseline="central"
+                                        className='text-xs font-bold'
+                                      >
+                                        {`${(percent * 100).toFixed(0)}%`}
+                                      </text>
+                                    );
+                                  }}>
                                 </Pie>
                             </PieChart>
                         </ChartContainer>
@@ -262,3 +287,5 @@ export default function DashboardPage() {
     </div>
   );
 }
+
+    

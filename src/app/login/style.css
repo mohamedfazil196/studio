@@ -98,6 +98,19 @@
     transition: .5s;
 }
 
+/* Fix for browser autofill background color */
+.input-box input:-webkit-autofill,
+.input-box input:-webkit-autofill:hover,
+.input-box input:-webkit-autofill:focus,
+.input-box input:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0 30px hsl(var(--background)) inset !important;
+    box-shadow: 0 0 0 30px hsl(var(--background)) inset !important;
+    -webkit-text-fill-color: hsl(var(--foreground)) !important;
+    caret-color: hsl(var(--foreground)) !important;
+    transition: background-color 5000s ease-in-out 0s;
+}
+
+
 .input-box input:focus,
 .input-box input:valid{
     border-bottom: 2px solid hsl(var(--primary));

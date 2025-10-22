@@ -1,3 +1,5 @@
+'use client';
+
 import { FileHeart, LogIn, LogOut, User as UserIcon, LayoutDashboard } from "lucide-react";
 import Link from 'next/link';
 import { useFirebase } from "@/firebase";

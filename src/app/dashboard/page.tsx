@@ -1,8 +1,9 @@
 
 "use client";
 
-import { useState } from 'react';
-import { useFirebase } from '@/firebase';
+import { useMemo } from 'react';
+import { useFirebase, useCollection, useMemoFirebase } from '@/firebase';
+import { collection } from 'firebase/firestore';
 import { User as UserIcon } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -13,7 +14,8 @@ import {
   ChartLegend,
   ChartLegendContent,
 } from "@/components/ui/chart"
-import { BarChart, CartesianGrid, XAxis, Bar, PieChart, Pie } from "recharts"
+import { BarChart, CartesianGrid, XAxis, Bar, PieChart, Pie, Cell } from "recharts"
+import { type MedicalReport } from '@/app/types/medical-report';
 
 
 const barChartData = [
@@ -32,11 +34,6 @@ const barChartConfig = {
   },
 }
 
-const pieChartData = [
-    { name: 'Normal', value: 70, fill: 'hsl(var(--chart-2))' },
-    { name: 'Needs Attention', value: 20, fill: 'hsl(var(--chart-3))' },
-    { name: 'Immediate Action', value: 10, fill: 'hsl(var(--chart-4))' },
-]
 
 const pieChartConfig = {
     value: {
@@ -58,8 +55,35 @@ const pieChartConfig = {
 
 
 export default function DashboardPage() {
-  const { user } = useFirebase();
-  const [reportCount, setReportCount] = useState(0);
+  const { user, firestore } = useFirebase();
+
+  const reportsQuery = useMemoFirebase(
+    () => user && firestore ? collection(firestore, 'users', user.uid, 'medical_reports') : null,
+    [firestore, user]
+  );
+  const { data: reports, isLoading } = useCollection<MedicalReport>(reportsQuery);
+
+  const pieChartData = useMemo(() => {
+    if (!reports) {
+      return [
+        { name: 'Normal', value: 0, fill: 'hsl(var(--chart-2))' },
+        { name: 'Needs Attention', value: 0, fill: 'hsl(var(--chart-3))' },
+        { name: 'Immediate Action', value: 0, fill: 'hsl(var(--chart-4))' },
+      ];
+    }
+    const counts = reports.reduce((acc, report) => {
+      acc[report.severity] = (acc[report.severity] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+
+    return [
+      { name: 'Normal', value: counts['Normal'] || 0, fill: 'hsl(var(--chart-2))' },
+      { name: 'Needs Attention', value: counts['Needs Attention'] || 0, fill: 'hsl(var(--chart-3))' },
+      { name: 'Immediate Action', value: counts['Immediate Action'] || 0, fill: 'hsl(var(--chart-4))' },
+    ];
+  }, [reports]);
+
+  const reportCount = reports?.length ?? 0;
 
   return (
     <div className="space-y-8 animate-fade-in">
@@ -78,7 +102,7 @@ export default function DashboardPage() {
               </div>
               <Card className="p-4 bg-card/50">
                   <p className="text-sm text-muted-foreground">Reports Analyzed</p>
-                  <p className="text-4xl font-bold text-primary">{reportCount}</p>
+                  <p className="text-4xl font-bold text-primary">{isLoading ? '...' : reportCount}</p>
               </Card>
         </div>
         
@@ -131,6 +155,9 @@ export default function DashboardPage() {
                                 innerRadius={60} 
                                 strokeWidth={5}
                             >
+                                {pieChartData.map((entry, index) => (
+                                    <Cell key={`cell-${index}`} fill={entry.fill} />
+                                ))}
                             </Pie>
                             <ChartLegend content={<ChartLegendContent nameKey="name" />} />
                         </PieChart>

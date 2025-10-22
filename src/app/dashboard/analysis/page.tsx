@@ -13,8 +13,12 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Bot } from 'lucide-react';
 import { type Analysis } from '@/app/types/analysis';
 import { Button } from '@/components/ui/button';
+import { useFirebase } from '@/firebase';
+import { addDocumentNonBlocking } from '@/firebase/non-blocking-updates';
+import { collection } from 'firebase/firestore';
 
 export default function AnalysisPage() {
+    const { firestore, user } = useFirebase();
     const [isProcessing, setIsProcessing] = useState(false);
     const [analysis, setAnalysis] = useState<Analysis | null>(null);
     const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
@@ -45,14 +49,27 @@ export default function AnalysisPage() {
                         recommendMedicines({ reportSummary: doctorSummary }),
                     ]);
 
-                    setAnalysis({
+                    const finalAnalysis: Analysis = {
                         doctorSummary,
                         patientSummary: patientSummaryResult.summary,
                         lifestyleSuggestions: lifestyleSuggestionsResult.suggestions,
                         severity: patientSummaryResult.severity,
                         medicines: medicinesResult,
-                    });
-                    setIsProcessing(false);
+                    };
+                    
+                    setAnalysis(finalAnalysis);
+
+                    if (user && firestore) {
+                        const reportsColRef = collection(firestore, 'users', user.uid, 'medical_reports');
+                        await addDocumentNonBlocking(reportsColRef, {
+                            ...finalAnalysis,
+                            fileName: file.name,
+                            fileType: file.type,
+                            uploadTimestamp: new Date().toISOString(),
+                            userId: user.uid,
+                        });
+                    }
+
                 } catch (error) {
                     console.error("Analysis Error (inner):", error);
                     toast({
@@ -61,6 +78,8 @@ export default function AnalysisPage() {
                         variant: "destructive",
                     });
                     handleReset();
+                } finally {
+                    setIsProcessing(false);
                 }
             };
             reader.onerror = () => {

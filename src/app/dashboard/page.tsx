@@ -20,8 +20,10 @@ import {
   ChartContainer,
   ChartTooltip,
   ChartTooltipContent,
+  ChartLegend,
+  ChartLegendContent,
 } from "@/components/ui/chart"
-import { BarChart, CartesianGrid, XAxis, Bar, PieChart, Pie } from "recharts"
+import { BarChart, CartesianGrid, XAxis, Bar, PieChart, Pie, Sector } from "recharts"
 
 
 export type Analysis = {
@@ -41,7 +43,7 @@ const chartData = [
   { month: "June", reports: 21 },
 ]
 
-const chartConfig = {
+const barChartConfig = {
   reports: {
     label: "Reports",
     color: "hsl(var(--chart-1))",
@@ -50,9 +52,28 @@ const chartConfig = {
 
 const pieChartData = [
     { name: 'Normal', value: 70, fill: 'hsl(var(--chart-2))' },
-    { name: 'Attention', value: 20, fill: 'hsl(var(--chart-3))' },
-    { name: 'Urgent', value: 10, fill: 'hsl(var(--chart-4))' },
+    { name: 'Needs Attention', value: 20, fill: 'hsl(var(--chart-3))' },
+    { name: 'Immediate Action', value: 10, fill: 'hsl(var(--chart-4))' },
 ]
+
+const pieChartConfig = {
+    value: {
+        label: 'Reports',
+    },
+    Normal: {
+        label: 'Normal',
+        color: 'hsl(var(--chart-2))',
+    },
+    'Needs Attention': {
+        label: 'Needs Attention',
+        color: 'hsl(var(--chart-3))',
+    },
+    'Immediate Action': {
+        label: 'Immediate Action',
+        color: 'hsl(var(--chart-4))',
+    },
+};
+
 
 export default function DashboardPage() {
   const [isProcessing, setIsProcessing] = useState(false);
@@ -223,36 +244,21 @@ export default function DashboardPage() {
                         <CardDescription>Breakdown of recent report results.</CardDescription>
                     </CardHeader>
                     <CardContent className="flex justify-center items-center">
-                         <ChartContainer config={{}} className="h-[200px] w-full">
+                         <ChartContainer config={pieChartConfig} className="h-[250px] w-full">
                             <PieChart>
-                                <ChartTooltip content={<ChartTooltipContent hideLabel />} />
-                                <Pie data={pieChartData} dataKey="value" nameKey="name" innerRadius={50} labelLine={false} label={({
-                                    cx,
-                                    cy,
-                                    midAngle,
-                                    innerRadius,
-                                    outerRadius,
-                                    percent,
-                                  }) => {
-                                    const RADIAN = Math.PI / 180;
-                                    const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
-                                    const x = cx + radius * Math.cos(-midAngle * RADIAN);
-                                    const y = cy + radius * Math.sin(-midAngle * RADIAN);
-
-                                    return (
-                                      <text
-                                        x={x}
-                                        y={y}
-                                        fill="white"
-                                        textAnchor={x > cx ? 'start' : 'end'}
-                                        dominantBaseline="central"
-                                        className='text-xs font-bold'
-                                      >
-                                        {`${(percent * 100).toFixed(0)}%`}
-                                      </text>
-                                    );
-                                  }}>
+                                <ChartTooltip 
+                                    cursor={false}
+                                    content={<ChartTooltipContent hideLabel />} 
+                                />
+                                <Pie 
+                                    data={pieChartData} 
+                                    dataKey="value" 
+                                    nameKey="name" 
+                                    innerRadius={60} 
+                                    strokeWidth={5}
+                                >
                                 </Pie>
+                                <ChartLegend content={<ChartLegendContent nameKey="name" />} />
                             </PieChart>
                         </ChartContainer>
                     </CardContent>
@@ -263,19 +269,23 @@ export default function DashboardPage() {
                         <CardDescription>Reports analyzed per month.</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <ChartContainer config={chartConfig} className="h-[200px] w-full">
-                            <BarChart accessibilityLayer data={chartData}>
+                        <ChartContainer config={barChartConfig} className="h-[250px] w-full">
+                            <BarChart accessibilityLayer data={chartData} margin={{ top: 20, right: 20, bottom: 10, left: 10 }}>
                                 <CartesianGrid vertical={false} />
                                 <XAxis
-                                dataKey="month"
-                                tickLine={false}
-                                tickMargin={10}
-                                axisLine={false}
-                                tickFormatter={(value) => value.slice(0, 3)}
+                                    dataKey="month"
+                                    tickLine={false}
+                                    tickMargin={10}
+                                    axisLine={false}
+                                    tickFormatter={(value) => value.slice(0, 3)}
                                 />
                                 <ChartTooltip
-                                cursor={false}
-                                content={<ChartTooltipContent hideLabel />}
+                                    cursor={false}
+                                    content={<ChartTooltipContent 
+                                        indicator="line"
+                                        labelClassName="font-bold"
+                                        className="bg-card/80 backdrop-blur-sm"
+                                    />}
                                 />
                                 <Bar dataKey="reports" fill="var(--color-reports)" radius={8} />
                             </BarChart>

@@ -553,26 +553,50 @@ const SidebarMenuButton = React.forwardRef<
       tooltip,
       href,
       className,
+      children,
       ...props
     },
     ref
   ) => {
     const { isMobile, state } = useSidebar()
-    const Comp = href ? (asChild ? Slot : 'a') : (asChild ? Slot : 'button');
+    
+    const buttonContent = (
+      <Slot
+        ref={ref as any}
+        data-sidebar="menu-button"
+        data-size={size}
+        data-active={isActive}
+        className={cn(sidebarMenuButtonVariants({ variant, size }), className, asChild ? '' : 'cursor-pointer')}
+        {...props}
+      >
+        {children}
+      </Slot>
+    );
 
-    const button = (
-      <Link href={href || '#'}>
-        <Comp
-          ref={ref as any}
-          data-sidebar="menu-button"
-          data-size={size}
-          data-active={isActive}
-          className={cn(sidebarMenuButtonVariants({ variant, size }), className)}
-          {...props}
-        />
-      </Link>
-    )
+    let button;
 
+    if (href) {
+      if(asChild) {
+        button = (
+          <Link href={href} legacyBehavior passHref>
+             {buttonContent}
+          </Link>
+        )
+      } else {
+         button = (
+          <Link href={href} passHref>
+             {React.cloneElement(buttonContent, { ...props, children, className: cn(sidebarMenuButtonVariants({ variant, size }), className) })}
+          </Link>
+        )
+      }
+    } else {
+       if (asChild) {
+        button = buttonContent;
+       } else {
+        button = <button {...props} ref={ref} className={cn(sidebarMenuButtonVariants({ variant, size }), className)}>{children}</button>
+       }
+    }
+    
     if (!tooltip) {
       return button
     }

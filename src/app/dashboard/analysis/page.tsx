@@ -50,7 +50,7 @@ export default function AnalysisPage() {
                         patientSummary: patientSummaryResult.summary,
                         lifestyleSuggestions: lifestyleSuggestionsResult.suggestions,
                         severity: patientSummaryResult.severity,
-                        medicines: medicinesResult.medicines,
+                        medicines: medicinesResult,
                     });
                     setIsProcessing(false);
                 } catch (error) {

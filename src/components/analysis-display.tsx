@@ -202,7 +202,7 @@ export function AnalysisDisplay({ fileName, analysis }: AnalysisDisplayProps) {
                   {analysis.medicines.disclaimer}
                 </p>
               )}
-              {analysis.medicines && analysis.medicines.recommendations && analysis.medicines.recommendations.length > 0 && (
+              {analysis.medicines && analysis.medicines.recommendations && analysis.medicines.recommendations.length > 0 ? (
                 <>
                   <ul className="space-y-4">
                     {analysis.medicines.recommendations.map((med, index) => (
@@ -221,6 +221,8 @@ export function AnalysisDisplay({ fileName, analysis }: AnalysisDisplayProps) {
                     </Button>
                   </div>
                 </>
+              ) : (
+                <p className="text-sm text-muted-foreground">No specific medicines were recommended based on this report.</p>
               )}
             </>
         </AnalysisCard>

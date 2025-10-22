@@ -5,7 +5,7 @@ import { Auth, signOut } from "firebase/auth";
 import { Button } from "../ui/button";
 
 export function Header() {
-  const { user, auth } = useFirebase();
+  const { user, auth, isUserLoading } = useFirebase();
 
   const handleSignOut = () => {
     if (auth) {
@@ -23,7 +23,7 @@ export function Header() {
           </h1>
         </Link>
         <div className="flex items-center gap-4">
-          {user ? (
+          {!isUserLoading && user ? (
             <>
               <Button asChild variant="ghost" size="sm">
                 <Link href="/dashboard">
@@ -40,14 +40,13 @@ export function Header() {
                 Sign Out
               </Button>
             </>
-          ) : (
-            <Button asChild variant="ghost" size="sm">
+          ) : !isUserLoading ? (
+            <Button asChild>
               <Link href="/login">
-                <LogIn className="mr-2 h-4 w-4" />
-                Sign In
+                Get Started
               </Link>
             </Button>
-          )}
+          ) : null}
         </div>
       </div>
     </header>

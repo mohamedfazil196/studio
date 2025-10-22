@@ -140,59 +140,51 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="flex flex-col min-h-screen bg-background text-foreground">
-      <Header />
-      <main className="flex-grow p-4 sm:p-6 lg:p-8">
-        <div className="max-w-7xl mx-auto">
-          {!analysis && !isProcessing && (
-            <div className="mb-8">
-              <Card className='bg-card/50 border-primary/20 p-6'>
-                  <div className="flex items-center gap-4">
-                      <Avatar className="h-16 w-16 border-2 border-primary">
-                          <AvatarImage src={user.photoURL ?? undefined} alt={user.displayName ?? "User"} />
-                          <AvatarFallback className="bg-primary text-primary-foreground">
-                              <UserIcon className="h-8 w-8" />
-                          </AvatarFallback>
-                      </Avatar>
-                      <div>
-                          <h1 className="text-2xl font-bold font-headline">Welcome back, {user.displayName || user.email}!</h1>
-                          <p className="text-muted-foreground">Ready to analyze a new report?</p>
-                      </div>
+    <div className="max-w-7xl mx-auto">
+      {!analysis && !isProcessing && (
+        <div className="mb-8">
+          <Card className='bg-card/50 border-primary/20 p-6'>
+              <div className="flex items-center gap-4">
+                  <Avatar className="h-16 w-16 border-2 border-primary">
+                      <AvatarImage src={user.photoURL ?? undefined} alt={user.displayName ?? "User"} />
+                      <AvatarFallback className="bg-primary text-primary-foreground">
+                          <UserIcon className="h-8 w-8" />
+                      </AvatarFallback>
+                  </Avatar>
+                  <div>
+                      <h1 className="text-2xl font-bold font-headline">Welcome back, {user.displayName || user.email}!</h1>
+                      <p className="text-muted-foreground">Ready to analyze a new report?</p>
                   </div>
-              </Card>
-            </div>
-          )}
-
-          {isProcessing ? (
-             <div className="w-full max-w-2xl mx-auto p-8 space-y-6">
-                <div className="flex items-center gap-4">
-                    <Skeleton className="h-12 w-12 rounded-full" />
-                    <div className='space-y-2'>
-                        <Skeleton className="h-6 w-72" />
-                        <Skeleton className="h-4 w-48" />
-                    </div>
-                </div>
-                <div className="space-y-4 pt-4">
-                    <Skeleton className="h-10 w-full" />
-                    <Skeleton className="h-64 w-full rounded-lg" />
-                </div>
-                <p className="text-center text-muted-foreground animate-pulse">Analyzing your report... this may take a moment.</p>
-            </div>
-          ) : analysis ? (
-            <div className="w-full">
-              <AnalysisDisplay fileName={uploadedFileName!} analysis={analysis} />
-              <div className="text-center mt-8">
-                  <Button variant="outline" onClick={handleReset}>Analyze Another Report</Button>
               </div>
-            </div>
-          ) : (
-            <FileUploader onFileUpload={handleFileUpload} />
-          )}
+          </Card>
         </div>
-      </main>
-      <footer className="text-center p-4 text-sm text-muted-foreground">
-          <p>MediScan AI is for demonstration purposes only. Not for real medical diagnosis.</p>
-      </footer>
+      )}
+
+      {isProcessing ? (
+         <div className="w-full max-w-2xl mx-auto p-8 space-y-6">
+            <div className="flex items-center gap-4">
+                <Skeleton className="h-12 w-12 rounded-full" />
+                <div className='space-y-2'>
+                    <Skeleton className="h-6 w-72" />
+                    <Skeleton className="h-4 w-48" />
+                </div>
+            </div>
+            <div className="space-y-4 pt-4">
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-64 w-full rounded-lg" />
+            </div>
+            <p className="text-center text-muted-foreground animate-pulse">Analyzing your report... this may take a moment.</p>
+        </div>
+      ) : analysis ? (
+        <div className="w-full">
+          <AnalysisDisplay fileName={uploadedFileName!} analysis={analysis} />
+          <div className="text-center mt-8">
+              <Button variant="outline" onClick={handleReset}>Analyze Another Report</Button>
+          </div>
+        </div>
+      ) : (
+        <FileUploader onFileUpload={handleFileUpload} />
+      )}
     </div>
   );
 }

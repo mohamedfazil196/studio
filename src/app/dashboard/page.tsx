@@ -17,23 +17,12 @@ import {
 import { BarChart, CartesianGrid, XAxis, Bar, PieChart, Pie, Cell } from "recharts"
 import { type MedicalReport } from '@/app/types/medical-report';
 
-
-const barChartData = [
-  { month: "January", reports: 18 },
-  { month: "February", reports: 35 },
-  { month: "March", reports: 23 },
-  { month: "April", reports: 7 },
-  { month: "May", reports: 20 },
-  { month: "June", reports: 21 },
-]
-
 const barChartConfig = {
   reports: {
     label: "Reports",
     color: "hsl(var(--chart-1))",
   },
 }
-
 
 const pieChartConfig = {
     value: {
@@ -63,6 +52,32 @@ export default function DashboardPage() {
   );
   const { data: reports, isLoading } = useCollection<MedicalReport>(reportsQuery);
 
+  const { barChartData, totalReports } = useMemo(() => {
+    if (!reports) {
+      return { barChartData: [], totalReports: 0 };
+    }
+
+    const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    const monthlyCounts: { [key: string]: number } = monthNames.reduce((acc, month) => ({ ...acc, [month]: 0 }), {});
+
+    reports.forEach(report => {
+        try {
+            const date = new Date(report.uploadTimestamp);
+            const monthName = monthNames[date.getMonth()];
+            if (monthlyCounts.hasOwnProperty(monthName)) {
+                monthlyCounts[monthName]++;
+            }
+        } catch (e) {
+            console.error("Invalid timestamp for report:", report.id);
+        }
+    });
+    
+    // For now, we only show the first 6 months for a cleaner chart
+    const chartData = Object.entries(monthlyCounts).slice(0, 6).map(([month, reports]) => ({ month, reports }));
+    
+    return { barChartData: chartData, totalReports: reports.length };
+  }, [reports]);
+
   const pieChartData = useMemo(() => {
     if (!reports) {
       return [
@@ -72,7 +87,8 @@ export default function DashboardPage() {
       ];
     }
     const counts = reports.reduce((acc, report) => {
-      acc[report.severity] = (acc[report.severity] || 0) + 1;
+      const severity = report.severity || 'Normal'; // Default to Normal if undefined
+      acc[severity] = (acc[severity] || 0) + 1;
       return acc;
     }, {} as Record<string, number>);
 
@@ -83,7 +99,6 @@ export default function DashboardPage() {
     ];
   }, [reports]);
 
-  const reportCount = reports?.length ?? 0;
 
   return (
     <div className="space-y-8 animate-fade-in">
@@ -102,7 +117,7 @@ export default function DashboardPage() {
               </div>
               <Card className="p-4 bg-card/50">
                   <p className="text-sm text-muted-foreground">Reports Analyzed</p>
-                  <p className="text-4xl font-bold text-primary">{isLoading ? '...' : reportCount}</p>
+                  <p className="text-4xl font-bold text-primary">{isLoading ? '...' : totalReports}</p>
               </Card>
         </div>
         

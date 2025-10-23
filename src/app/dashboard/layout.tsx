@@ -34,12 +34,13 @@ export default function DashboardLayout({
   
   if (isUserLoading || !user) {
     return (
-        <div className="flex items-center justify-center min-h-screen bg-background text-foreground">
-            <div className="flex flex-col items-center gap-4">
-                <FileHeart className="w-16 h-16 text-primary animate-pulse" />
-                <p className="text-muted-foreground">Loading MediScan AI...</p>
-            </div>
+      <div className="flex items-center justify-center min-h-screen bg-background text-foreground">
+        <div className="flex flex-col items-center gap-4 animate-fade-in">
+          <FileHeart className="w-20 h-20 text-primary animate-pulse" />
+          <p className="text-lg font-semibold text-muted-foreground mt-4">Initializing AI dashboard...</p>
+          <p className="text-sm text-muted-foreground/80">Please wait a moment.</p>
         </div>
+      </div>
     );
   }
 

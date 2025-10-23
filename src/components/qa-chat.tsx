@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useRef, useEffect } from 'react';
@@ -67,13 +68,13 @@ export function QAChat({ reportSummary }: QAChatProps) {
   };
 
   return (
-    <Card className="h-full flex flex-col max-h-[70vh]">
+    <Card className="h-full flex flex-col max-h-[80vh]">
       <CardHeader>
         <CardTitle className="font-headline text-xl text-primary">Interactive Q&amp;A</CardTitle>
         <CardDescription>Ask our AI assistant questions about your report summary.</CardDescription>
       </CardHeader>
       <CardContent className="flex-grow flex flex-col gap-4 overflow-hidden">
-        <ScrollArea className="flex-grow h-[300px] pr-4" ref={scrollAreaRef}>
+        <ScrollArea className="flex-grow h-[400px] pr-4" ref={scrollAreaRef}>
           <div className="space-y-4">
             {messages.length === 0 ? (
                  <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground p-4">
@@ -112,7 +113,7 @@ export function QAChat({ reportSummary }: QAChatProps) {
                  <Avatar className="h-8 w-8">
                     <AvatarFallback className='bg-primary text-primary-foreground'><Bot className="h-5 w-5"/></AvatarFallback>
                   </Avatar>
-                <div className="bg-muted rounded-lg px-4 py-3 flex items-center">
+                <div className="bg-card-foreground/5 rounded-lg px-4 py-3 flex items-center">
                   <Loader2 className="h-5 w-5 animate-spin text-muted-foreground"/>
                 </div>
               </div>

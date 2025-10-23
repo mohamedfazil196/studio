@@ -61,8 +61,12 @@ export default function AnalysisPage() {
 
                     if (user && firestore) {
                         const reportsColRef = collection(firestore, 'users', user.uid, 'medical_reports');
-                        await addDocumentNonBlocking(reportsColRef, {
-                            ...finalAnalysis,
+                        addDocumentNonBlocking(reportsColRef, {
+                            doctorSummary: finalAnalysis.doctorSummary,
+                            patientSummary: finalAnalysis.patientSummary,
+                            lifestyleSuggestions: finalAnalysis.lifestyleSuggestions,
+                            severity: finalAnalysis.severity,
+                            medicines: finalAnalysis.medicines,
                             fileName: file.name,
                             fileType: file.type,
                             uploadTimestamp: new Date().toISOString(),
@@ -104,12 +108,14 @@ export default function AnalysisPage() {
 
     if (isProcessing) {
         return (
-           <div className="w-full max-w-2xl mx-auto p-8 space-y-6 flex flex-col items-center justify-center min-h-[70vh]">
+           <div className="w-full max-w-2xl mx-auto p-8 space-y-6 flex flex-col items-center justify-center min-h-[70vh] text-center">
               <Bot className="w-24 h-24 text-primary animate-pulse" />
               <h2 className="text-2xl font-headline font-bold mt-4">Analyzing Your Report...</h2>
-              <p className="text-center text-muted-foreground">The AI is working its magic. This may take a moment.</p>
-              <Skeleton className="h-4 w-3/4 mt-8" />
-              <Skeleton className="h-4 w-1/2 mt-2" />
+              <p className="text-muted-foreground">The AI is working its magic. This may take a moment.</p>
+              <div className="w-full space-y-4 mt-8">
+                <Skeleton className="h-4 w-3/4 mx-auto" />
+                <Skeleton className="h-4 w-1/2 mx-auto" />
+              </div>
           </div>
         )
     }

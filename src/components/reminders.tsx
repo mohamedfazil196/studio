@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState } from 'react';
@@ -13,6 +14,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { ScrollArea } from './ui/scroll-area';
+import { Skeleton } from './ui/skeleton';
 import { Trash2, BellRing, PlusCircle, Clock, Pill } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -45,6 +47,27 @@ type MedicineReminder = ReminderFormValues & {
     timeZone: string;
 };
 
+const ReminderSkeleton = () => (
+    <div className="space-y-4">
+        {[...Array(3)].map((_, i) => (
+             <Card key={i} className="flex items-center justify-between p-4 bg-card-foreground/5">
+                <div className="flex items-center gap-4">
+                    <Skeleton className="h-6 w-6 rounded-full" />
+                    <div>
+                        <Skeleton className="h-4 w-32" />
+                        <Skeleton className="h-3 w-20 mt-1" />
+                    </div>
+                </div>
+                <div className="flex items-center gap-4">
+                     <Skeleton className="h-4 w-16" />
+                     <Skeleton className="h-8 w-8" />
+                </div>
+            </Card>
+        ))}
+    </div>
+)
+
+
 export function Reminders() {
     const { firestore, user } = useFirebase();
     const { toast } = useToast();
@@ -76,7 +99,7 @@ export function Reminders() {
         };
 
         const colRef = collection(firestore, 'users', user.uid, 'medicine_reminders');
-        await addDocumentNonBlocking(colRef, newReminder);
+        addDocumentNonBlocking(colRef, newReminder);
 
         toast({
             title: "Reminder Set!",
@@ -177,11 +200,12 @@ export function Reminders() {
                 <div>
                      <h3 className="text-lg font-semibold mb-4 border-b pb-2">Your Reminders</h3>
                      <ScrollArea className="h-[50vh] pr-4">
-                        {isLoading && <p>Loading reminders...</p>}
+                        {isLoading && <ReminderSkeleton />}
                         {!isLoading && reminders && reminders.length === 0 && (
                             <div className="text-center text-muted-foreground py-10">
                                 <BellRing className="mx-auto h-12 w-12" />
                                 <p className="mt-4">You have no reminders set.</p>
+                                <p className="text-sm">Use the form on the left to add one.</p>
                             </div>
                         )}
                         <div className="space-y-4">

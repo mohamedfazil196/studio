@@ -1,11 +1,21 @@
 
 "use client";
 
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { ArrowRight, FileHeart, Bot, Stethoscope, Lightbulb } from 'lucide-react';
 import Link from 'next/link';
 
 export default function Home() {
+  const [isLoading, setIsLoading] = useState(false);
+  const router = useRouter();
+
+  const handleGetStartedClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    e.preventDefault();
+    setIsLoading(true);
+    router.push('/login');
+  };
 
   const FeatureCard = ({ icon, title, description }: { icon: React.ReactNode, title: string, description: string }) => (
     <div className="bg-card/50 backdrop-blur-sm p-6 rounded-lg border border-primary/10 flex flex-col items-center text-center transform transition-transform duration-300 hover:scale-105 hover:border-primary/30">
@@ -16,6 +26,15 @@ export default function Home() {
       <p className="text-muted-foreground text-sm">{description}</p>
     </div>
   );
+
+  if (isLoading) {
+    return (
+      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background text-foreground animate-fade-in">
+        <FileHeart className="w-20 h-20 text-primary animate-pulse" />
+        <p className="text-lg font-semibold text-muted-foreground mt-4">Getting things ready...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground">
@@ -29,9 +48,9 @@ export default function Home() {
             </Link>
             <div className="flex items-center gap-4">
                 <Button asChild>
-                    <Link href="/login">
+                    <a href="/login" onClick={handleGetStartedClick}>
                         Get Started
-                    </Link>
+                    </a>
                 </Button>
             </div>
         </div>
@@ -50,9 +69,9 @@ export default function Home() {
             </p>
             <div className="mt-8 flex justify-center gap-4">
               <Button asChild size="lg" className="group">
-                <Link href="/login">
+                <a href="/login" onClick={handleGetStartedClick}>
                   Get Started <ArrowRight className="w-5 h-5 ml-2 transition-transform group-hover:translate-x-1" />
-                </Link>
+                </a>
               </Button>
             </div>
           </div>

@@ -32,6 +32,7 @@ type RegisterFormValues = z.infer<typeof registerSchema>;
 
 export default function LoginPage() {
   const [isActive, setIsActive] = useState(false);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
   const { auth } = useFirebase();
   const { toast } = useToast();
   const router = useRouter();
@@ -48,12 +49,10 @@ export default function LoginPage() {
 
   const onLoginSubmit = async (values: LoginFormValues) => {
     if (!auth) return;
+    setIsLoggingIn(true);
     try {
       await initiateEmailSignIn(auth as Auth, values.email, values.password);
-      toast({
-        title: 'Login Successful',
-        description: "You're now logged in.",
-      });
+      // Don't show toast here, let the dashboard load
       router.push('/dashboard');
     } catch (error: any) {
       toast({
@@ -61,17 +60,16 @@ export default function LoginPage() {
         description: error.message || 'An unexpected error occurred.',
         variant: 'destructive',
       });
+      setIsLoggingIn(false);
     }
   };
 
   const onRegisterSubmit = async (values: RegisterFormValues) => {
     if (!auth) return;
+    setIsLoggingIn(true);
     try {
       await initiateEmailSignUp(auth as Auth, values.email, values.password);
-      toast({
-        title: 'Registration Successful',
-        description: "You're now logged in.",
-      });
+      // Don't show toast here, let the dashboard load
       router.push('/dashboard');
     } catch (error: any) {
       toast({
@@ -79,9 +77,23 @@ export default function LoginPage() {
         description: error.message || 'An unexpected error occurred.',
         variant: 'destructive',
       });
+      setIsLoggingIn(false);
     }
   };
   
+  if (isLoggingIn) {
+    return (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background text-foreground animate-fade-in">
+            <div className="relative flex justify-center items-center">
+                <div className="absolute h-24 w-24 rounded-full border-t-4 border-b-4 border-primary animate-spin"></div>
+                <FileHeart className="w-16 h-16 text-primary" />
+            </div>
+            <p className="text-lg font-semibold text-muted-foreground mt-8">Securely logging you in...</p>
+            <p className="text-sm text-muted-foreground/80">Please wait a moment.</p>
+        </div>
+    );
+  }
+
   return (
     <div className='login-body'>
         <Link href="/" className='absolute left-8 top-8 flex items-center gap-3'>

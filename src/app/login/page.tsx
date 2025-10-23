@@ -68,7 +68,7 @@ export default function LoginPage() {
     if (!auth) return;
     setIsLoggingIn(true);
     try {
-      await initiateEmailSignUp(auth as Auth, values.email, values.password);
+      await initiateEmailSignUp(auth as Auth, values.email, values.password, values.username);
       // Don't show toast here, let the dashboard load
       router.push('/dashboard');
     } catch (error: any) {

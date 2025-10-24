@@ -96,12 +96,16 @@ export default function LoginPage() {
 
   return (
     <div className='login-body'>
-        <Link href="/" className='absolute left-12 top-10 flex items-center gap-3'>
-             <FileHeart className="h-10 w-10 text-primary" />
-             <h1 className="text-3xl font-headline font-bold text-primary">
-                MediScan AI
-            </h1>
-        </Link>
+      <header className="absolute top-0 left-0 right-0 py-4 px-4 sm:px-6 lg:px-8 z-10">
+        <div className="mx-auto flex items-center justify-center">
+             <Link href="/" className='flex items-center gap-3'>
+                 <FileHeart className="h-10 w-10 text-primary" />
+                 <h1 className="text-3xl font-headline font-bold text-primary">
+                    MediScan AI
+                </h1>
+            </Link>
+        </div>
+      </header>
       <div className={cn('container', isActive && 'active')}>
         <div className="curved-shape"></div>
         <div className="curved-shape2"></div>

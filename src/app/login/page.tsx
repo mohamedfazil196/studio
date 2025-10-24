@@ -96,7 +96,7 @@ export default function LoginPage() {
 
   return (
     <div className='login-body'>
-      <header className="absolute top-0 left-0 right-0 py-4 px-4 sm:px-6 lg:px-8 z-10">
+      <header className="absolute top-0 left-0 right-0 pt-4 px-4 sm:px-6 lg:px-8 z-10">
         <div className="mx-auto flex items-center justify-center">
              <Link href="/" className='flex items-center gap-3'>
                  <FileHeart className="h-10 w-10 text-primary" />

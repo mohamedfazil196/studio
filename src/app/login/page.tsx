@@ -96,7 +96,7 @@ export default function LoginPage() {
 
   return (
     <div className='login-body'>
-        <Link href="/" className='absolute left-8 top-8 flex items-center gap-3'>
+        <Link href="/" className='absolute left-12 top-10 flex items-center gap-3'>
              <FileHeart className="h-10 w-10 text-primary" />
              <h1 className="text-3xl font-headline font-bold text-primary">
                 MediScan AI

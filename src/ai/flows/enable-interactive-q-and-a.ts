@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview Implements the interactive Q&A functionality for medical reports.
@@ -37,8 +38,11 @@ const interactiveQAndAPrompt = ai.definePrompt({
   Here is the question:
   {{question}}
 
-  Answer the question clearly and concisely, using information from the report summary.
+  First, answer the question clearly and concisely, using information from the report summary.
   If the question cannot be answered based on the summary, state that you cannot answer the question.
+  
+  After providing the answer, you MUST include the following disclaimer on a new line:
+  "Disclaimer: I am an AI assistant and not a medical professional. Please consult with a qualified doctor for any medical advice."
   `,
 });
 

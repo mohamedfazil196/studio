@@ -2,7 +2,7 @@
 'use client';
 
 import { useFirebase, useCollection, useMemoFirebase } from "@/firebase";
-import { Sidebar, SidebarProvider, SidebarInset, SidebarMenuButtonProps } from "@/components/ui/sidebar";
+import { Sidebar, SidebarProvider, SidebarInset, SidebarMenuButtonProps, SidebarMenuButton } from "@/components/ui/sidebar";
 import { SidebarHeader, SidebarTrigger, SidebarMenu, SidebarMenuItem, SidebarContent, SidebarFooter } from "@/components/ui/sidebar";
 import { LayoutDashboard, FileUp, MessagesSquare, BellRing, Settings, LogOut, FileHeart, HeartPulse, Loader2, Sparkles } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";

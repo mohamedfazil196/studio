@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import { type Analysis } from "@/app/types/analysis";
 import { Button } from "./ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { translateAndSpeak } from "@/ai/flows/translate-and-speak";
 import { useToast } from "@/hooks/use-toast";
 import { ScrollArea } from "./ui/scroll-area";
@@ -61,6 +61,13 @@ export function AnalysisDisplay({ fileName, analysis }: AnalysisDisplayProps) {
 
   const handleLanguageChange = async (langCode: string) => {
       setSelectedLanguage(langCode);
+      // Reset audio when language changes
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.src = "";
+      }
+      setIsPlaying(false);
+
       if (langCode === 'en') {
           setTranslatedSummary(analysis.patientSummary);
           return;
@@ -70,11 +77,14 @@ export function AnalysisDisplay({ fileName, analysis }: AnalysisDisplayProps) {
       try {
         const result = await translateAndSpeak({ text: analysis.patientSummary, targetLanguage: langCode });
         setTranslatedSummary(result.translatedText);
-        if (audioRef.current) {
-            audioRef.current.src = result.audioDataUri;
-        } else {
-            audioRef.current = new Audio(result.audioDataUri);
+        
+        // Setup new audio
+        if (!audioRef.current) {
+            audioRef.current = new Audio();
+            audioRef.current.onended = () => setIsPlaying(false);
         }
+        audioRef.current.src = result.audioDataUri;
+
       } catch (error) {
           console.error('Translation error:', error);
           toast({
@@ -89,35 +99,53 @@ export function AnalysisDisplay({ fileName, analysis }: AnalysisDisplayProps) {
   }
 
   const handlePlayPause = async () => {
-    if (!audioRef.current) {
-        if (selectedLanguage === 'en') {
-             toast({
-              title: "Audio not ready",
-              description: "Please select a language other than English to generate audio.",
-              variant: "destructive"
-          });
-          return;
-        }
-        await handleLanguageChange(selectedLanguage);
+    if (selectedLanguage === 'en') {
+        toast({
+            title: "Feature not available for English",
+            description: "Please select another language to use text-to-speech.",
+            variant: "default"
+        });
+        return;
     }
 
-    if (audioRef.current) {
-        if (isPlaying) {
-            audioRef.current.pause();
-            setIsPlaying(false);
-        } else {
-            if(!audioRef.current.src){
-                await handleLanguageChange(selectedLanguage);
+    if (!audioRef.current || !audioRef.current.src) {
+        setIsTranslating(true);
+        await handleLanguageChange(selectedLanguage); // This will set up the audio
+        setIsTranslating(false);
+        // After handleLanguageChange, audioRef.current should be ready to play
+        // We add a small delay to ensure the src is loaded
+        setTimeout(() => {
+            if (audioRef.current) {
+                audioRef.current.play().then(() => setIsPlaying(true)).catch(e => console.error("Playback failed after re-init", e));
             }
-            audioRef.current.play().catch(e => {
-                toast({ title: "Playback Error", description: "Could not play audio.", variant: "destructive" });
-                console.error(e);
-            });
+        }, 100);
+        return;
+    }
+
+    if (isPlaying) {
+        audioRef.current.pause();
+        setIsPlaying(false);
+    } else {
+        audioRef.current.play().then(() => {
             setIsPlaying(true);
-            audioRef.current.onended = () => setIsPlaying(false);
-        }
+        }).catch(e => {
+            toast({ title: "Playback Error", description: "Could not play audio.", variant: "destructive" });
+            console.error(e);
+        });
     }
   };
+
+  // Cleanup audio element on component unmount
+  useEffect(() => {
+    const audioElement = audioRef.current;
+    return () => {
+        if (audioElement) {
+            audioElement.pause();
+            audioElement.src = '';
+        }
+    };
+  }, []);
+
 
   const AnalysisCard = ({ icon, title, children }: { icon: React.ReactNode, title: string, children: React.ReactNode }) => (
     <Card className="h-full">
@@ -170,7 +198,7 @@ export function AnalysisDisplay({ fileName, analysis }: AnalysisDisplayProps) {
                                 ))}
                             </SelectContent>
                         </Select>
-                        <Button size="icon" variant="outline" onClick={handlePlayPause} disabled={isTranslating}>
+                        <Button size="icon" variant="outline" onClick={handlePlayPause} disabled={isTranslating || selectedLanguage === 'en'}>
                             {isTranslating ? <Loader2 className="animate-spin" /> : isPlaying ? <Pause /> : <Play />}
                             <span className="sr-only">Play or pause summary</span>
                         </Button>
@@ -179,7 +207,7 @@ export function AnalysisDisplay({ fileName, analysis }: AnalysisDisplayProps) {
             </CardHeader>
             <CardContent>
                 <ScrollArea className="h-[40vh] pr-4">
-                    {isTranslating ? (
+                    {isTranslating && selectedLanguage !== 'en' ? (
                         <div className="flex items-center justify-center h-full">
                             <Loader2 className="w-8 h-8 animate-spin text-primary" />
                         </div>

@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview A flow that translates text and converts it to speech.
@@ -66,7 +67,7 @@ const translateAndSpeakFlow = ai.defineFlow(
   async ({ text, targetLanguage }) => {
     // 1. Translate text
     const { text: translatedText } = await ai.generate({
-      prompt: `Translate the following text to ${targetLanguage}: ${text}`,
+      prompt: `Translate the following text to the language specified by the code '${targetLanguage}': ${text}`,
       model: 'googleai/gemini-2.5-flash',
     });
 

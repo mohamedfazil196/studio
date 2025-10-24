@@ -1,3 +1,4 @@
+
 'use server';
 
 import { config } from 'dotenv';
@@ -9,3 +10,4 @@ import '@/ai/flows/enable-interactive-q-and-a.ts';
 import '@/ai/flows/provide-lifestyle-and-health-suggestions.ts';
 import '@/ai/flows/recommend-medicines.ts';
 import '@/ai/flows/translate-and-speak.ts';
+import '@/ai/flows/get-health-tip.ts';

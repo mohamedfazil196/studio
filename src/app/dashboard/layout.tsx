@@ -106,6 +106,13 @@ const HealthTracker = () => {
   )
 }
 
+const PageTransitionLoader = () => (
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background text-foreground animate-fade-in">
+        <FileHeart className="w-20 h-20 text-primary animate-pulse" />
+        <p className="text-lg font-semibold text-muted-foreground mt-4">Loading...</p>
+    </div>
+);
+
 
 export default function DashboardLayout({
   children,
@@ -115,12 +122,18 @@ export default function DashboardLayout({
   const pathname = usePathname();
   const { user, isUserLoading, auth } = useFirebase();
   const router = useRouter();
+  const [isNavigating, setIsNavigating] = useState(false);
 
   useEffect(() => {
     if (!isUserLoading && !user) {
       router.push('/login');
     }
   }, [user, isUserLoading, router]);
+  
+  // Reset navigation loader when path changes
+  useEffect(() => {
+    setIsNavigating(false);
+  }, [pathname]);
 
   const handleSignOut = () => {
     if (auth) {
@@ -129,6 +142,13 @@ export default function DashboardLayout({
       });
     }
   }
+
+  const handleNavigationClick = (e: React.MouseEvent<HTMLButtonElement | HTMLAnchorElement>, href?: string) => {
+    if (href && href !== pathname) {
+      setIsNavigating(true);
+    }
+    // If it's a button click without an href (like settings/logout), we don't set loading state.
+  };
   
   if (isUserLoading || !user) {
     return (
@@ -140,6 +160,10 @@ export default function DashboardLayout({
         </div>
       </div>
     );
+  }
+
+  if (isNavigating) {
+    return <PageTransitionLoader />;
   }
 
   return (
@@ -159,25 +183,25 @@ export default function DashboardLayout({
         <SidebarContent>
             <SidebarMenu>
                  <SidebarMenuItem>
-                    <SidebarMenuButton href="/dashboard" isActive={pathname === '/dashboard'} tooltip="Dashboard">
+                    <SidebarMenuButton href="/dashboard" isActive={pathname === '/dashboard'} tooltip="Dashboard" onClick={(e) => handleNavigationClick(e, '/dashboard')}>
                         <LayoutDashboard />
                         <span>Dashboard</span>
                     </SidebarMenuButton>
                 </SidebarMenuItem>
                  <SidebarMenuItem>
-                    <SidebarMenuButton href="/dashboard/analysis" isActive={pathname === '/dashboard/analysis'} tooltip="Analysis">
+                    <SidebarMenuButton href="/dashboard/analysis" isActive={pathname === '/dashboard/analysis'} tooltip="Analysis" onClick={(e) => handleNavigationClick(e, '/dashboard/analysis')}>
                         <FileUp />
                         <span>Analysis</span>
                     </SidebarMenuButton>
                 </SidebarMenuItem>
                 <SidebarMenuItem>
-                    <SidebarMenuButton href="/dashboard/chat" isActive={pathname === '/dashboard/chat'} tooltip="Q&A Chatbot">
+                    <SidebarMenuButton href="/dashboard/chat" isActive={pathname === '/dashboard/chat'} tooltip="Q&A Chatbot" onClick={(e) => handleNavigationClick(e, '/dashboard/chat')}>
                         <MessagesSquare />
                         <span>Q&A Chatbot</span>
                     </SidebarMenuButton>
                 </SidebarMenuItem>
                 <SidebarMenuItem>
-                    <SidebarMenuButton href="/dashboard/reminders" isActive={pathname === '/dashboard/reminders'} tooltip="Reminders">
+                    <SidebarMenuButton href="/dashboard/reminders" isActive={pathname === '/dashboard/reminders'} tooltip="Reminders" onClick={(e) => handleNavigationClick(e, '/dashboard/reminders')}>
                         <BellRing />
                         <span>Reminders</span>
                     </SidebarMenuButton>
@@ -190,13 +214,13 @@ export default function DashboardLayout({
         <SidebarFooter>
            <SidebarMenu>
              <SidebarMenuItem>
-                <SidebarMenuButton href="#" tooltip="Settings">
+                <SidebarMenuButton href="#" tooltip="Settings" onClick={(e) => handleNavigationClick(e)}>
                   <Settings />
                   <span>Settings</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
                <SidebarMenuItem>
-                <SidebarMenuButton onClick={handleSignOut} tooltip="Sign Out">
+                <SidebarMenuButton onClick={(e) => { handleNavigationClick(e); handleSignOut(); }} tooltip="Sign Out">
                   <LogOut />
                   <span>Sign Out</span>
                 </SidebarMenuButton>

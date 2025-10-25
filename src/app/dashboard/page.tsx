@@ -4,9 +4,10 @@
 import { useMemo } from 'react';
 import { useFirebase, useCollection, useMemoFirebase } from '@/firebase';
 import { collection } from 'firebase/firestore';
-import { User as UserIcon } from 'lucide-react';
+import { User as UserIcon, FileText, AlertTriangle, ShieldAlert, Activity } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import {
   ChartContainer,
   ChartTooltip,
@@ -14,15 +15,9 @@ import {
   ChartLegend,
   ChartLegendContent,
 } from "@/components/ui/chart"
-import { BarChart, CartesianGrid, XAxis, Bar, PieChart, Pie, Cell } from "recharts"
+import { PieChart, Pie, Cell } from "recharts"
 import { type MedicalReport } from '@/app/types/medical-report';
-
-const barChartConfig = {
-  reports: {
-    label: "Reports",
-    color: "hsl(var(--chart-1))",
-  },
-}
+import { format } from 'date-fns';
 
 const pieChartConfig = {
     value: {
@@ -42,6 +37,25 @@ const pieChartConfig = {
     },
 };
 
+const severityConfig: { [key: string]: { class: string, icon: React.FC<any> } } = {
+    'Normal': { class: 'border-green-500/50 text-green-400', icon: ShieldAlert },
+    'Needs Attention': { class: 'border-yellow-500/50 text-yellow-400', icon: AlertTriangle },
+    'Immediate Action': { class: 'border-red-500/50 text-red-500', icon: AlertTriangle },
+};
+
+const StatCard = ({ title, value, icon, description }: { title: string, value: number | string, icon: React.ReactNode, description: string }) => (
+    <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">{title}</CardTitle>
+            {icon}
+        </CardHeader>
+        <CardContent>
+            <div className="text-2xl font-bold">{value}</div>
+            <p className="text-xs text-muted-foreground">{description}</p>
+        </CardContent>
+    </Card>
+);
+
 
 export default function DashboardPage() {
   const { user, firestore } = useFirebase();
@@ -52,51 +66,38 @@ export default function DashboardPage() {
   );
   const { data: reports, isLoading } = useCollection<MedicalReport>(reportsQuery);
 
-  const { barChartData, totalReports } = useMemo(() => {
+  const { pieChartData, summaryStats, recentReports } = useMemo(() => {
     if (!reports) {
-      return { barChartData: [], totalReports: 0 };
+      return { 
+        pieChartData: [], 
+        summaryStats: { total: 0, needsAttention: 0, immediateAction: 0 },
+        recentReports: []
+      };
     }
 
-    const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-    const monthlyCounts: { [key: string]: number } = monthNames.reduce((acc, month) => ({ ...acc, [month]: 0 }), {});
-
-    reports.forEach(report => {
-        try {
-            const date = new Date(report.uploadTimestamp);
-            const monthName = monthNames[date.getMonth()];
-            if (monthlyCounts.hasOwnProperty(monthName)) {
-                monthlyCounts[monthName]++;
-            }
-        } catch (e) {
-            console.error("Invalid timestamp for report:", report.id);
-        }
-    });
-    
-    // For now, we only show the first 6 months for a cleaner chart
-    const chartData = Object.entries(monthlyCounts).slice(0, 6).map(([month, reports]) => ({ month, reports }));
-    
-    return { barChartData: chartData, totalReports: reports.length };
-  }, [reports]);
-
-  const pieChartData = useMemo(() => {
-    if (!reports) {
-      return [
-        { name: 'Normal', value: 0, fill: 'hsl(var(--chart-2))' },
-        { name: 'Needs Attention', value: 0, fill: 'hsl(var(--chart-3))' },
-        { name: 'Immediate Action', value: 0, fill: 'hsl(var(--chart-4))' },
-      ];
-    }
     const counts = reports.reduce((acc, report) => {
-      const severity = report.severity || 'Normal'; // Default to Normal if undefined
+      const severity = report.severity || 'Normal';
       acc[severity] = (acc[severity] || 0) + 1;
       return acc;
     }, {} as Record<string, number>);
 
-    return [
+    const pieData = [
       { name: 'Normal', value: counts['Normal'] || 0, fill: 'hsl(var(--chart-2))' },
       { name: 'Needs Attention', value: counts['Needs Attention'] || 0, fill: 'hsl(var(--chart-3))' },
       { name: 'Immediate Action', value: counts['Immediate Action'] || 0, fill: 'hsl(var(--chart-4))' },
     ];
+    
+    const sortedReports = [...reports].sort((a, b) => new Date(b.uploadTimestamp).getTime() - new Date(a.uploadTimestamp).getTime());
+
+    return { 
+      pieChartData: pieData, 
+      summaryStats: {
+        total: reports.length,
+        needsAttention: counts['Needs Attention'] || 0,
+        immediateAction: counts['Immediate Action'] || 0,
+      },
+      recentReports: sortedReports.slice(0, 5) // Get latest 5 reports
+    };
   }, [reports]);
 
 
@@ -115,46 +116,66 @@ export default function DashboardPage() {
                       <p className="text-muted-foreground">Here is your health overview dashboard.</p>
                   </div>
               </div>
-              <Card className="p-4 bg-card/50">
-                  <p className="text-sm text-muted-foreground">Reports Analyzed</p>
-                  <p className="text-4xl font-bold text-primary">{isLoading ? '...' : totalReports}</p>
-              </Card>
         </div>
         
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <Card className="lg:col-span-2">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <StatCard 
+                title="Total Reports"
+                value={isLoading ? '...' : summaryStats.total}
+                description="Total number of reports analyzed."
+                icon={<FileText className="h-4 w-4 text-muted-foreground" />}
+            />
+            <StatCard 
+                title="Needs Attention"
+                value={isLoading ? '...' : summaryStats.needsAttention}
+                description="Reports flagged for follow-up."
+                icon={<ShieldAlert className="h-4 w-4 text-muted-foreground" />}
+            />
+            <StatCard 
+                title="Immediate Action"
+                value={isLoading ? '...' : summaryStats.immediateAction}
+                description="Reports with urgent findings."
+                icon={<AlertTriangle className="h-4 w-4 text-muted-foreground" />}
+            />
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+            <Card className="lg:col-span-3">
                 <CardHeader>
-                    <CardTitle className='font-headline text-primary'>Monthly Usage</CardTitle>
-                    <CardDescription>Reports analyzed per month.</CardDescription>
+                    <CardTitle className='font-headline text-primary'>Recent Reports</CardTitle>
+                    <CardDescription>Your last 5 analyzed reports.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <ChartContainer config={barChartConfig} className="h-[250px] w-full">
-                        <BarChart accessibilityLayer data={barChartData} margin={{ top: 20, right: 20, bottom: 10, left: 10 }}>
-                            <CartesianGrid vertical={false} />
-                            <XAxis
-                                dataKey="month"
-                                tickLine={false}
-                                tickMargin={10}
-                                axisLine={false}
-                                tickFormatter={(value) => value.slice(0, 3)}
-                            />
-                            <ChartTooltip
-                                cursor={false}
-                                content={<ChartTooltipContent 
-                                    indicator="line"
-                                    labelClassName="font-bold"
-                                    className="bg-card/80 backdrop-blur-sm"
-                                />}
-                            />
-                            <Bar dataKey="reports" fill="var(--color-reports)" radius={8} />
-                        </BarChart>
-                    </ChartContainer>
+                    <div className="space-y-4">
+                        {isLoading ? (
+                            Array.from({ length: 5 }).map((_, i) => <div key={i} className="flex items-center p-2 rounded-md bg-muted/50 animate-pulse h-12"></div>)
+                        ) : recentReports.length > 0 ? (
+                            recentReports.map(report => (
+                                <div key={report.id} className="flex items-center justify-between p-2 rounded-md hover:bg-muted/50 transition-colors">
+                                    <div className="flex items-center gap-3">
+                                        <Activity className="h-5 w-5 text-primary" />
+                                        <div>
+                                            <p className="font-semibold text-sm">{report.fileName}</p>
+                                            <p className="text-xs text-muted-foreground">
+                                                Analyzed on {format(new Date(report.uploadTimestamp), 'MMM dd, yyyy')}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <Badge variant="outline" className={severityConfig[report.severity]?.class}>{report.severity}</Badge>
+                                </div>
+                            ))
+                        ) : (
+                            <div className="text-center py-10 text-muted-foreground">
+                                <p>No reports analyzed yet.</p>
+                            </div>
+                        )}
+                    </div>
                 </CardContent>
             </Card>
-            <Card>
+            <Card className="lg:col-span-2">
                 <CardHeader>
                     <CardTitle className='font-headline text-primary'>Analysis History</CardTitle>
-                    <CardDescription>Breakdown of recent report results.</CardDescription>
+                    <CardDescription>Breakdown of all report results.</CardDescription>
                 </CardHeader>
                 <CardContent className="flex justify-center items-center">
                      <ChartContainer config={pieChartConfig} className="h-[250px] w-full">

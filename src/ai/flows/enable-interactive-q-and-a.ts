@@ -44,8 +44,7 @@ const interactiveQAndAPrompt = ai.definePrompt({
   {{#if chatHistory}}
   Conversation History:
   {{#each chatHistory}}
-  {{#if (eq role 'user')}}User: {{content}}{{/if}}
-  {{#if (eq role 'bot')}}Assistant: {{content}}{{/if}}
+  {{role}}: {{content}}
   {{/each}}
   {{/if}}
 

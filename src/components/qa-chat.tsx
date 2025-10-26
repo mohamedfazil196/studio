@@ -102,7 +102,7 @@ export function QAChat({ reportSummary }: QAChatProps) {
                       : 'bg-card-foreground/5'
                   }`}
                 >
-                  <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                  <p className="text-sm whitespace-pre-line">{message.content}</p>
                 </div>
                  {message.role === 'user' && (
                   <Avatar className="h-8 w-8">

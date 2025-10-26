@@ -55,8 +55,9 @@ const interactiveQAndAPrompt = ai.definePrompt({
   1. First, determine if the user's question can be answered using the "Medical Report Summary (Context)" and the "Conversation History" provided above.
   2. If the question is related to the summary or history, answer it clearly and concisely, using only information from the provided context.
   3. If the user's question is a general medical question and cannot be answered from the context, answer it to the best of your ability as a helpful medical AI.
-  4. Maintain context from the conversation history to answer follow-up questions.
-  5. At the end of EVERY answer, you MUST include the following disclaimer on a new line:
+  4. When providing explanations or lists, use markdown formatting (like bullet points with '*') to present the information point-by-point for clarity and proper alignment.
+  5. Maintain context from the conversation history to answer follow-up questions.
+  6. At the end of EVERY answer, you MUST include the following disclaimer on a new line:
   "Disclaimer: I am an AI assistant and not a medical professional. Please consult with a qualified doctor for any medical advice."
   `,
 });

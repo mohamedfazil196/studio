@@ -81,8 +81,8 @@ export function QAChat({ reportSummary }: QAChatProps) {
   return (
     <Card className="h-full flex flex-col max-h-[80vh]">
       <CardHeader>
-        <CardTitle className="font-headline text-xl text-primary">Interactive Q&amp;A</CardTitle>
-        <CardDescription>Ask our AI assistant questions about your report summary.</CardDescription>
+        <CardTitle className="font-headline text-xl text-primary flex items-center gap-2"><MessagesSquare />Interactive Q&A</CardTitle>
+        <CardDescription>Ask questions about the report summary or general medical topics.</CardDescription>
       </CardHeader>
       <CardContent className="flex-grow flex flex-col gap-4 overflow-hidden">
         <ScrollArea className="flex-grow h-[400px] pr-4" ref={scrollAreaRef}>

@@ -10,6 +10,7 @@ import { translateAndSpeak } from "@/ai/flows/translate-and-speak";
 import { useToast } from "@/hooks/use-toast";
 import { ScrollArea } from "./ui/scroll-area";
 import Link from 'next/link';
+import { QAChat } from "./qa-chat";
 
 type AnalysisDisplayProps = {
   fileName: string;
@@ -147,8 +148,8 @@ export function AnalysisDisplay({ fileName, analysis }: AnalysisDisplayProps) {
   }, []);
 
 
-  const AnalysisCard = ({ icon, title, children }: { icon: React.ReactNode, title: string, children: React.ReactNode }) => (
-    <Card className="h-full">
+  const AnalysisCard = ({ icon, title, children, className }: { icon: React.ReactNode, title: string, children: React.ReactNode, className?: string }) => (
+    <Card className={cn("h-full", className)}>
         <CardHeader>
             <CardTitle className="font-headline text-xl text-primary flex items-center gap-2">{icon}{title}</CardTitle>
         </CardHeader>
@@ -254,6 +255,9 @@ export function AnalysisDisplay({ fileName, analysis }: AnalysisDisplayProps) {
               )}
             </>
         </AnalysisCard>
+        <div className="lg:col-span-2">
+           <QAChat reportSummary={analysis.doctorSummary} />
+        </div>
       </div>
     </div>
   );

@@ -40,6 +40,7 @@ export function QAChat({ reportSummary }: QAChatProps) {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
 
+    const previousMessages = messages;
     const userMessage: Message = { role: 'user', content: input };
     const newMessages = [...messages, userMessage];
     setMessages(newMessages);
@@ -51,7 +52,7 @@ export function QAChat({ reportSummary }: QAChatProps) {
       const result = await askQuestion({
         reportSummary,
         question: currentInput,
-        chatHistory: messages, // Pass the conversation history
+        chatHistory: newMessages.slice(0, -1), // Pass history *before* new message
       });
 
       const botMessage: Message = { role: 'bot', content: result.answer };
@@ -63,8 +64,8 @@ export function QAChat({ reportSummary }: QAChatProps) {
         description: "Failed to get an answer. Please try again.",
         variant: "destructive",
       });
-      // Revert the user message if the API call fails
-      setMessages(messages);
+      // Revert to the state before the user's message was added
+      setMessages(previousMessages);
     } finally {
       setIsLoading(false);
     }

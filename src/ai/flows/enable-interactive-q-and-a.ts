@@ -11,9 +11,15 @@
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 
+const ChatMessageSchema = z.object({
+  role: z.enum(['user', 'bot']),
+  content: z.string(),
+});
+
 const InteractiveQAndAInputSchema = z.object({
   reportSummary: z.string().describe('A summary of the medical report.'),
   question: z.string().describe('The question about the medical report.'),
+  chatHistory: z.array(ChatMessageSchema).optional().describe('The previous messages in the conversation.'),
 });
 export type InteractiveQAndAInput = z.infer<typeof InteractiveQAndAInputSchema>;
 
@@ -30,19 +36,28 @@ const interactiveQAndAPrompt = ai.definePrompt({
   name: 'interactiveQAndAPrompt',
   input: {schema: InteractiveQAndAInputSchema},
   output: {schema: InteractiveQAndAOutputSchema},
-  prompt: `You are a medical expert AI assistant. Your primary goal is to answer questions based on the provided medical report summary.
+  prompt: `You are a medical expert AI assistant. Your primary goal is to answer questions based on the provided medical report summary and the ongoing conversation history.
 
   Medical Report Summary (Context):
   {{reportSummary}}
 
-  User's Question:
+  {{#if chatHistory}}
+  Conversation History:
+  {{#each chatHistory}}
+  {{#if (eq role 'user')}}User: {{content}}{{/if}}
+  {{#if (eq role 'bot')}}Assistant: {{content}}{{/if}}
+  {{/each}}
+  {{/if}}
+
+  User's New Question:
   {{question}}
 
   Instructions:
-  1. First, determine if the user's question can be answered using the "Medical Report Summary (Context)" provided above.
-  2. If the question is related to the summary, answer it clearly and concisely using only information from the summary.
-  3. If the user's question is a general medical question and cannot be answered from the summary, answer it to the best of your ability as a helpful medical AI.
-  4. At the end of EVERY answer, you MUST include the following disclaimer on a new line:
+  1. First, determine if the user's question can be answered using the "Medical Report Summary (Context)" and the "Conversation History" provided above.
+  2. If the question is related to the summary or history, answer it clearly and concisely, using only information from the provided context.
+  3. If the user's question is a general medical question and cannot be answered from the context, answer it to the best of your ability as a helpful medical AI.
+  4. Maintain context from the conversation history to answer follow-up questions.
+  5. At the end of EVERY answer, you MUST include the following disclaimer on a new line:
   "Disclaimer: I am an AI assistant and not a medical professional. Please consult with a qualified doctor for any medical advice."
   `,
 });

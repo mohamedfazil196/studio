@@ -43,6 +43,7 @@ export function QAChat({ reportSummary }: QAChatProps) {
     const previousMessages = messages;
     const userMessage: Message = { role: 'user', content: input };
     const newMessages = [...messages, userMessage];
+    
     setMessages(newMessages);
     const currentInput = input;
     setInput('');
@@ -52,7 +53,7 @@ export function QAChat({ reportSummary }: QAChatProps) {
       const result = await askQuestion({
         reportSummary,
         question: currentInput,
-        chatHistory: newMessages.slice(0, -1), // Pass history *before* new message
+        chatHistory: previousMessages, // Pass history *before* new message
       });
 
       const botMessage: Message = { role: 'bot', content: result.answer };

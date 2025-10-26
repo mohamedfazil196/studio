@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { askQuestion } from '@/ai/flows/enable-interactive-q-and-a';
+import { askQuestion, type InteractiveQAndAInput } from '@/ai/flows/enable-interactive-q-and-a';
 import { useToast } from '@/hooks/use-toast';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 
@@ -50,10 +50,16 @@ export function QAChat({ reportSummary }: QAChatProps) {
     setIsLoading(true);
 
     try {
+      // Correctly format the history for the AI flow
+      const chatHistoryForAI: InteractiveQAndAInput['chatHistory'] = previousMessages.map(msg => ({
+        role: msg.role,
+        content: msg.content,
+      }));
+
       const result = await askQuestion({
         reportSummary,
         question: currentInput,
-        chatHistory: previousMessages, // Pass history *before* new message
+        chatHistory: chatHistoryForAI,
       });
 
       const botMessage: Message = { role: 'bot', content: result.answer };

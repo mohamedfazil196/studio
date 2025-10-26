@@ -20,6 +20,50 @@ type QAChatProps = {
   reportSummary: string;
 };
 
+const BotMessageContent = ({ content }: { content: string }) => {
+    const renderLine = (line: string) => {
+        // Handle bolding with **text**
+        const parts = line.split(/(\*\*.*?\*\*)/g);
+        return parts.map((part, index) => {
+            if (part.startsWith('**') && part.endsWith('**')) {
+                return <strong key={index}>{part.slice(2, -2)}</strong>;
+            }
+            return part;
+        });
+    };
+
+    const lines = content.split('\n');
+
+    return (
+        <div className="text-sm whitespace-pre-line">
+            {lines.map((line, index) => {
+                const trimmedLine = line.trim();
+                // Check for bullet points (*, -, or numbers like 1.)
+                if (trimmedLine.startsWith('* ') || trimmedLine.startsWith('- ')) {
+                    return (
+                        <div key={index} className="flex items-start">
+                            <span className="mr-2">&#8226;</span>
+                            <span className="flex-1">{renderLine(trimmedLine.substring(2))}</span>
+                        </div>
+                    );
+                }
+                 if (/^\d+\.\s/.test(trimmedLine)) {
+                     const match = trimmedLine.match(/^(\d+\.)\s(.*)/);
+                     if (match) {
+                        return (
+                            <div key={index} className="flex items-start">
+                                <span className="mr-2">{match[1]}</span>
+                                <span className="flex-1">{renderLine(match[2])}</span>
+                            </div>
+                        );
+                     }
+                }
+                return <div key={index}>{renderLine(line)}</div>;
+            })}
+        </div>
+    );
+};
+
 export function QAChat({ reportSummary }: QAChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -50,9 +94,8 @@ export function QAChat({ reportSummary }: QAChatProps) {
     setIsLoading(true);
 
     try {
-      // Correctly format the history for the AI flow
       const chatHistoryForAI: InteractiveQAndAInput['chatHistory'] = previousMessages.map(msg => ({
-        role: msg.role,
+        role: msg.role === 'user' ? 'user' : 'bot',
         content: msg.content,
       }));
 
@@ -71,7 +114,6 @@ export function QAChat({ reportSummary }: QAChatProps) {
         description: "Failed to get an answer. Please try again.",
         variant: "destructive",
       });
-      // Revert to the state before the user's message was added
       setMessages(previousMessages);
     } finally {
       setIsLoading(false);
@@ -110,7 +152,11 @@ export function QAChat({ reportSummary }: QAChatProps) {
                       : 'bg-card-foreground/5'
                   }`}
                 >
-                  <p className="text-sm whitespace-pre-line">{message.content}</p>
+                   {message.role === 'bot' ? (
+                        <BotMessageContent content={message.content} />
+                    ) : (
+                        <p className="text-sm whitespace-pre-line">{message.content}</p>
+                    )}
                 </div>
                  {message.role === 'user' && (
                   <Avatar className="h-8 w-8">

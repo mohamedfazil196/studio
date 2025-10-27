@@ -3,8 +3,8 @@
     {
       "id": "doctor-avatar",
       "description": "A friendly and professional 3D cartoon doctor for the talking avatar feature in the chatbot.",
-      "imageUrl": "https://storage.googleapis.com/aifirebase/scenarios/movie-recommendation/3d-doctor.png",
-      "imageHint": "3d doctor"
+      "imageUrl": "https://storage.googleapis.com/aifirebase/pre-built-images/3d-doctor.png",
+      "imageHint": "3d avatar"
     }
   ]
 }

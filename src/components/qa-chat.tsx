@@ -2,14 +2,19 @@
 "use client";
 
 import { useState, useRef, useEffect } from 'react';
-import { Bot, User, Send, Loader2, MessagesSquare } from 'lucide-react';
+import Image from 'next/image';
+import { Bot, User, Send, Loader2, Mic, MicOff } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { askQuestion, type InteractiveQAndAInput } from '@/ai/flows/enable-interactive-q-and-a';
+import { textToSpeech } from '@/ai/flows/text-to-speech';
 import { useToast } from '@/hooks/use-toast';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import { doctorAvatar } from '@/lib/placeholder-images';
 
 type Message = {
   role: 'user' | 'bot';
@@ -35,7 +40,7 @@ const BotMessageContent = ({ content }: { content: string }) => {
     const lines = content.split('\n');
 
     return (
-        <div className="text-sm whitespace-pre-line">
+        <div className="text-sm">
             {lines.map((line, index) => {
                 const trimmedLine = line.trim();
                 // Check for bullet points (*, -, or numbers like 1.)
@@ -68,8 +73,11 @@ export function QAChat({ reportSummary }: QAChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isAvatarMode, setIsAvatarMode] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
   const { toast } = useToast();
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     if (scrollAreaRef.current) {
@@ -80,15 +88,24 @@ export function QAChat({ reportSummary }: QAChatProps) {
     }
   }, [messages, isLoading]);
 
+  useEffect(() => {
+    // Cleanup audio on component unmount or when avatar mode is turned off
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+    };
+  }, []);
+
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
 
-    const previousMessages = messages;
+    const previousMessages = [...messages];
     const userMessage: Message = { role: 'user', content: input };
-    const newMessages = [...messages, userMessage];
     
-    setMessages(newMessages);
+    setMessages(prev => [...prev, userMessage]);
     const currentInput = input;
     setInput('');
     setIsLoading(true);
@@ -107,6 +124,24 @@ export function QAChat({ reportSummary }: QAChatProps) {
 
       const botMessage: Message = { role: 'bot', content: result.answer };
       setMessages((prev) => [...prev, botMessage]);
+
+      if (isAvatarMode) {
+        setIsSpeaking(true);
+        try {
+          const speechResult = await textToSpeech({ text: result.answer });
+          if (!audioRef.current) {
+            audioRef.current = new Audio();
+            audioRef.current.onended = () => setIsSpeaking(false);
+          }
+          audioRef.current.src = speechResult.audioDataUri;
+          audioRef.current.play();
+        } catch (speechError) {
+          console.error("TTS Error:", speechError);
+          toast({ title: "Audio Error", description: "Could not generate audio for the response.", variant: "destructive" });
+          setIsSpeaking(false);
+        }
+      }
+
     } catch (error) {
       console.error("Q&A Error:", error);
       toast({
@@ -120,16 +155,47 @@ export function QAChat({ reportSummary }: QAChatProps) {
     }
   };
 
+  const handleToggleAvatarMode = (checked: boolean) => {
+    setIsAvatarMode(checked);
+    if (!checked && audioRef.current) {
+      audioRef.current.pause();
+      setIsSpeaking(false);
+    }
+  }
+
   return (
     <Card className="h-full flex flex-col max-h-[80vh]">
       <CardHeader>
-        <CardTitle className="font-headline text-xl text-primary flex items-center gap-2"><MessagesSquare />Interactive Q&A</CardTitle>
-        <CardDescription>Ask questions about the report summary or general medical topics.</CardDescription>
+        <div className="flex justify-between items-start">
+            <div>
+                 <CardTitle className="font-headline text-xl text-primary flex items-center gap-2">Interactive Q&A</CardTitle>
+                 <CardDescription>Ask questions about the report summary or general medical topics.</CardDescription>
+            </div>
+            <div className="flex items-center space-x-2">
+                <Switch id="avatar-mode" checked={isAvatarMode} onCheckedChange={handleToggleAvatarMode} />
+                <Label htmlFor="avatar-mode">Talking Avatar</Label>
+            </div>
+        </div>
       </CardHeader>
       <CardContent className="flex-grow flex flex-col gap-4 overflow-hidden">
+        {isAvatarMode && (
+            <div className="relative h-48 w-48 mx-auto mb-4 rounded-full overflow-hidden border-4 border-primary shadow-lg flex items-center justify-center">
+                <Image src={doctorAvatar.imageUrl} alt="Doctor Avatar" width={192} height={192} className="object-cover" data-ai-hint={doctorAvatar.imageHint} />
+                {isSpeaking && (
+                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                        <Mic className="h-12 w-12 text-white animate-pulse" />
+                    </div>
+                )}
+                 {!isSpeaking && (
+                    <div className="absolute bottom-2 right-2 bg-background/70 p-2 rounded-full">
+                        <MicOff className="h-4 w-4 text-muted-foreground" />
+                    </div>
+                 )}
+            </div>
+        )}
         <ScrollArea className="flex-grow h-[400px] pr-4" ref={scrollAreaRef}>
           <div className="space-y-4">
-            {messages.length === 0 ? (
+            {messages.length === 0 && !isAvatarMode ? (
                  <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground p-4">
                     <Bot className="w-12 h-12 mb-4" />
                     <p className="font-semibold">No questions asked yet.</p>
@@ -196,3 +262,5 @@ export function QAChat({ reportSummary }: QAChatProps) {
     </Card>
   );
 }
+
+    

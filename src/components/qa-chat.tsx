@@ -231,18 +231,17 @@ export function QAChat({ reportSummary }: QAChatProps) {
       </CardHeader>
       <CardContent className="flex-grow flex flex-col gap-4 overflow-hidden">
         {isAvatarMode && (
-            <div className="relative h-48 w-48 mx-auto mb-4 rounded-full overflow-hidden border-4 border-primary shadow-lg flex items-center justify-center">
-                <Image src={doctorAvatar.imageUrl} alt="Doctor Avatar" width={192} height={192} className="object-cover" data-ai-hint={doctorAvatar.imageHint} />
-                {isSpeaking && (
-                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                        <Mic className="h-12 w-12 text-white animate-pulse" />
-                    </div>
-                )}
-                 {!isSpeaking && (
-                    <div className="absolute bottom-2 right-2 bg-background/70 p-2 rounded-full">
-                        <MicOff className="h-4 w-4 text-muted-foreground" />
-                    </div>
-                 )}
+            <div className="relative h-48 w-48 mx-auto mb-4 rounded-full flex items-center justify-center bg-gradient-to-br from-primary/20 to-background">
+                <Image 
+                  src={doctorAvatar.imageUrl} 
+                  alt="Doctor Avatar" 
+                  width={180} 
+                  height={180} 
+                  className={`object-contain transition-transform duration-300 ${isSpeaking ? 'scale-105' : 'scale-100'}`} 
+                  data-ai-hint={doctorAvatar.imageHint}
+                  priority
+                />
+                 <div className={`absolute inset-0 rounded-full border-4 border-primary transition-all duration-300 ${isSpeaking ? 'animate-pulse' : 'border-transparent'}`}></div>
             </div>
         )}
         <ScrollArea className="flex-grow h-[400px] pr-4" ref={scrollAreaRef}>
@@ -326,5 +325,3 @@ export function QAChat({ reportSummary }: QAChatProps) {
     </Card>
   );
 }
-
-    

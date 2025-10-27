@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { askQuestion, type InteractiveQAndAInput, ChatMessage } from '@/ai/flows/enable-interactive-q-and-a';
+import { askQuestion, type InteractiveQAndAInput, type ChatMessage } from '@/ai/flows/enable-interactive-q-and-a';
 import { textToSpeech } from '@/ai/flows/text-to-speech';
 import { useToast } from '@/hooks/use-toast';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -150,10 +150,12 @@ export function QAChat({ reportSummary }: QAChatProps) {
     setIsLoading(true);
 
     try {
-       const chatHistoryForAI: ChatMessage[] = messages.map(msg => ({
-        role: msg.role === 'user' ? 'user' : 'bot',
-        content: msg.content,
-      }));
+      const chatHistoryForAI: ChatMessage[] = newMessages
+        .filter(msg => msg.role === 'bot' || msg.role === 'user')
+        .map(msg => ({
+            role: msg.role,
+            content: msg.content,
+        }));
 
       const result = await askQuestion({
         reportSummary,
@@ -324,3 +326,5 @@ export function QAChat({ reportSummary }: QAChatProps) {
     </Card>
   );
 }
+
+    

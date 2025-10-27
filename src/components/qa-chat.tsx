@@ -3,18 +3,19 @@
 
 import { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
-import { Bot, User, Send, Loader2, Mic, MicOff } from 'lucide-react';
+import { Bot, User, Send, Loader2, Mic, MicOff, MessagesSquare } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { askQuestion, type InteractiveQAndAInput } from '@/ai/flows/enable-interactive-q-and-a';
+import { askQuestion, type InteractiveQAndAInput, ChatMessage } from '@/ai/flows/enable-interactive-q-and-a';
 import { textToSpeech } from '@/ai/flows/text-to-speech';
 import { useToast } from '@/hooks/use-toast';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { doctorAvatar } from '@/lib/placeholder-images';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 
 type Message = {
   role: 'user' | 'bot';
@@ -27,7 +28,6 @@ type QAChatProps = {
 
 const BotMessageContent = ({ content }: { content: string }) => {
     const renderLine = (line: string) => {
-        // Handle bolding with **text**
         const parts = line.split(/(\*\*.*?\*\*)/g);
         return parts.map((part, index) => {
             if (part.startsWith('**') && part.endsWith('**')) {
@@ -40,14 +40,13 @@ const BotMessageContent = ({ content }: { content: string }) => {
     const lines = content.split('\n');
 
     return (
-        <div className="text-sm">
+        <div className="text-sm space-y-2">
             {lines.map((line, index) => {
                 const trimmedLine = line.trim();
-                // Check for bullet points (*, -, or numbers like 1.)
                 if (trimmedLine.startsWith('* ') || trimmedLine.startsWith('- ')) {
                     return (
                         <div key={index} className="flex items-start">
-                            <span className="mr-2">&#8226;</span>
+                            <span className="mr-2 mt-1">&#8226;</span>
                             <span className="flex-1">{renderLine(trimmedLine.substring(2))}</span>
                         </div>
                     );
@@ -57,13 +56,17 @@ const BotMessageContent = ({ content }: { content: string }) => {
                      if (match) {
                         return (
                             <div key={index} className="flex items-start">
-                                <span className="mr-2">{match[1]}</span>
+                                <span className="mr-2 mt-1">{match[1]}</span>
                                 <span className="flex-1">{renderLine(match[2])}</span>
                             </div>
                         );
                      }
                 }
-                return <div key={index}>{renderLine(line)}</div>;
+                // Render lines that are just disclaimers or simple text
+                if (trimmedLine.length > 0) {
+                  return <div key={index}>{renderLine(line)}</div>;
+                }
+                return null;
             })}
         </div>
     );
@@ -79,6 +82,40 @@ export function QAChat({ reportSummary }: QAChatProps) {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
+  // Voice Input State
+  const [isListening, setIsListening] = useState(false);
+  const [speechSupported, setSpeechSupported] = useState(false);
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
+
+  useEffect(() => {
+    // Check for browser support on component mount
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      setSpeechSupported(true);
+      const recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = 'en-US';
+      
+      recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        setInput(transcript);
+        // Automatically send the message after successful transcription
+        handleSendMessage(new Event('submit'), transcript);
+      };
+      recognition.onerror = (event) => {
+        console.error("Speech recognition error", event.error);
+        toast({ title: "Voice Error", description: "Could not recognize speech. Please try again.", variant: "destructive" });
+        setIsListening(false);
+      };
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+      recognitionRef.current = recognition;
+    }
+  }, [toast]);
+
+
   useEffect(() => {
     if (scrollAreaRef.current) {
         const viewport = scrollAreaRef.current.querySelector('div[data-radix-scroll-area-viewport]');
@@ -89,29 +126,31 @@ export function QAChat({ reportSummary }: QAChatProps) {
   }, [messages, isLoading]);
 
   useEffect(() => {
-    // Cleanup audio on component unmount or when avatar mode is turned off
     return () => {
       if (audioRef.current) {
         audioRef.current.pause();
         audioRef.current = null;
       }
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
     };
   }, []);
 
-  const handleSendMessage = async (e: React.FormEvent) => {
+  const handleSendMessage = async (e: React.FormEvent | Event, messageContent?: string) => {
     e.preventDefault();
-    if (!input.trim() || isLoading) return;
+    const currentInput = (messageContent || input).trim();
+    if (!currentInput || isLoading) return;
 
-    const previousMessages = [...messages];
-    const userMessage: Message = { role: 'user', content: input };
+    const userMessage: Message = { role: 'user', content: currentInput };
+    const newMessages = [...messages, userMessage];
     
-    setMessages(prev => [...prev, userMessage]);
-    const currentInput = input;
+    setMessages(newMessages);
     setInput('');
     setIsLoading(true);
 
     try {
-      const chatHistoryForAI: InteractiveQAndAInput['chatHistory'] = previousMessages.map(msg => ({
+       const chatHistoryForAI: ChatMessage[] = messages.map(msg => ({
         role: msg.role === 'user' ? 'user' : 'bot',
         content: msg.content,
       }));
@@ -149,7 +188,8 @@ export function QAChat({ reportSummary }: QAChatProps) {
         description: "Failed to get an answer. Please try again.",
         variant: "destructive",
       });
-      setMessages(previousMessages);
+      // Revert to messages before the user's message was added
+      setMessages(messages);
     } finally {
       setIsLoading(false);
     }
@@ -163,12 +203,22 @@ export function QAChat({ reportSummary }: QAChatProps) {
     }
   }
 
+  const handleMicClick = () => {
+    if (isListening) {
+      recognitionRef.current?.stop();
+      setIsListening(false);
+    } else {
+      recognitionRef.current?.start();
+      setIsListening(true);
+    }
+  };
+
   return (
     <Card className="h-full flex flex-col max-h-[80vh]">
       <CardHeader>
         <div className="flex justify-between items-start">
             <div>
-                 <CardTitle className="font-headline text-xl text-primary flex items-center gap-2">Interactive Q&A</CardTitle>
+                 <CardTitle className="font-headline text-xl text-primary flex items-center gap-2"><MessagesSquare />Interactive Q&A</CardTitle>
                  <CardDescription>Ask questions about the report summary or general medical topics.</CardDescription>
             </div>
             <div className="flex items-center space-x-2">
@@ -249,10 +299,22 @@ export function QAChat({ reportSummary }: QAChatProps) {
           <Input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="e.g., What does 'hemoglobin' mean?"
-            disabled={isLoading}
+            placeholder="Type or click the mic to talk..."
+            disabled={isLoading || isListening}
             autoComplete="off"
           />
+           <TooltipProvider>
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <Button type="button" size="icon" variant="outline" onClick={handleMicClick} disabled={!speechSupported || isLoading}>
+                           {isListening ? <Mic className="h-4 w-4 text-red-500 animate-pulse" /> : <Mic className="h-4 w-4" />}
+                            <span className="sr-only">Use microphone</span>
+                        </Button>
+                    </TooltipTrigger>
+                    {!speechSupported && <TooltipContent>Voice input is not supported in your browser.</TooltipContent>}
+                </Tooltip>
+            </TooltipProvider>
+
           <Button type="submit" size="icon" disabled={isLoading || !input.trim()}>
             {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
             <span className="sr-only">Send</span>
@@ -262,5 +324,3 @@ export function QAChat({ reportSummary }: QAChatProps) {
     </Card>
   );
 }
-
-    

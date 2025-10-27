@@ -113,13 +113,13 @@ export default function LoginPage() {
           <h2 className="animation" style={{ '--D': 0, '--S': 21 } as React.CSSProperties}>Login</h2>
           <form onSubmit={loginForm.handleSubmit(onLoginSubmit)}>
             <div className="input-box animation" style={{ '--D': 1, '--S': 22 } as React.CSSProperties}>
-              <input type="email" {...loginForm.register('email')} required />
+              <input type="email" {...loginForm.register('email')} required placeholder=" " />
               <label>Email</label>
               <Mail className="text-foreground/70" />
             </div>
              {loginForm.formState.errors.email && <p className="error-message">{loginForm.formState.errors.email.message}</p>}
             <div className="input-box animation" style={{ '--D': 2, '--S': 23 } as React.CSSProperties}>
-              <input type="password" {...loginForm.register('password')} required />
+              <input type="password" {...loginForm.register('password')} required placeholder=" " />
               <label>Password</label>
               <Lock className="text-foreground/70" />
             </div>
@@ -142,19 +142,19 @@ export default function LoginPage() {
           <h2 className="animation" style={{ '--li': 17, '--S': 0 } as React.CSSProperties}>Register</h2>
           <form onSubmit={registerForm.handleSubmit(onRegisterSubmit)}>
             <div className="input-box animation" style={{ '--li': 18, '--S': 1 } as React.CSSProperties}>
-              <input type="text" {...registerForm.register('username')} required />
+              <input type="text" {...registerForm.register('username')} required placeholder=" " />
               <label>Username</label>
               <User className="text-foreground/70" />
             </div>
             {registerForm.formState.errors.username && <p className="error-message">{registerForm.formState.errors.username.message}</p>}
             <div className="input-box animation" style={{ '--li': 19, '--S': 2 } as React.CSSProperties}>
-              <input type="email" {...registerForm.register('email')} required />
+              <input type="email" {...registerForm.register('email')} required placeholder=" " />
               <label>Email</label>
               <Mail className="text-foreground/70" />
             </div>
             {registerForm.formState.errors.email && <p className="error-message">{registerForm.formState.errors.email.message}</p>}
             <div className="input-box animation" style={{ '--li': 19, '--S': 3 } as React.CSSProperties}>
-              <input type="password" {...registerForm.register('password')} required />
+              <input type="password" {...registerForm.register('password')} required placeholder=" " />
               <label>Password</label>
               <Lock className="text-foreground/70" />
             </div>

@@ -41,7 +41,6 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
   const speakText = useCallback((text: string) => {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
     
-    // Cancel any ongoing speech
     window.speechSynthesis.cancel();
     
     const cleanText = text.replace(/\*\*/g, '');
@@ -50,11 +49,10 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
     utterance.onstart = () => setStatus("speaking");
     utterance.onend = () => setStatus("idle");
     utterance.onerror = (e) => {
-        console.error("Speech synthesis error", e);
         setStatus("idle");
         toast({
             title: "Voice Error",
-            description: e.error || "Could not play audio.",
+            description: e.error || "Could not play audio. Your browser might not support this voice.",
             variant: "destructive"
         });
     };
@@ -95,7 +93,6 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
           description: "Could not get a response. Please try again.",
           variant: "destructive"
         });
-        // Remove the user message that caused the error to prevent clutter
         setChatHistory(prev => prev.slice(0, -1));
       }
     }, [chatHistory, reportSummary, speakText, toast]);
@@ -136,7 +133,10 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
     recognition.interimResults = false;
 
     recognition.onstart = () => setStatus("listening");
-    recognition.onend = () => setStatus(currentStatus => currentStatus === 'listening' ? 'idle' : currentStatus);
+    recognition.onend = () => {
+        // This check prevents moving to 'idle' if we are already 'thinking'
+        setStatus(currentStatus => currentStatus === 'listening' ? 'idle' : currentStatus);
+    }
     recognition.onerror = (event) => {
       if (event.error !== 'no-speech' && event.error !== 'aborted') {
         console.error("Speech recognition error:", event.error);
@@ -158,7 +158,6 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
   }, [processAndRespond]); 
 
   useEffect(() => {
-    // Auto-start listening loop
     if (status === "idle") {
       const timer = setTimeout(() => startListening(), 100);
       return () => clearTimeout(timer);
@@ -167,7 +166,7 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
 
   const handleMuteToggle = () => {
     if (status === "muted") {
-      setStatus("idle"); // Go back to listening loop
+      setStatus("idle");
     } else {
       stopListening();
       window.speechSynthesis.cancel();

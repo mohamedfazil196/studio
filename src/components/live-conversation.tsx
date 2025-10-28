@@ -32,6 +32,7 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const transcriptRef = useRef<string>("");
+  const isProcessingRef = useRef(false);
 
   const stopSpeaking = useCallback(() => {
     if (audioRef.current) {
@@ -39,15 +40,30 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
       audioRef.current.currentTime = 0;
     }
   }, []);
+
+  const startListening = useCallback(() => {
+    if (isMuted || !recognitionRef.current || isProcessingRef.current) {
+      setStatus("idle");
+      return;
+    }
+    try {
+        transcriptRef.current = "";
+        recognitionRef.current.start();
+        setStatus("listening");
+    } catch (e) {
+      // Errors like "already started" can be ignored.
+    }
+  }, [isMuted]);
   
   const processAndRespond = useCallback(async (transcript: string) => {
-    if (!transcript.trim()) {
-        setStatus("idle");
-        // eslint-disable-next-line @typescript-eslint/no-use-before-define
-        setTimeout(startListening, 100);
+    if (isProcessingRef.current || !transcript.trim()) {
+        if (!transcript.trim()) {
+            startListening();
+        }
         return;
     }
     
+    isProcessingRef.current = true;
     setStatus("thinking");
     const userMessage: Message = { role: "user", content: transcript };
     const currentHistory = [...chatHistory, userMessage];
@@ -63,7 +79,7 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
       setChatHistory(prev => [...prev, botMessage]);
 
       if (isMuted) {
-          // eslint-disable-next-line @typescript-eslint/no-use-before-define
+          isProcessingRef.current = false;
           startListening();
           return;
       }
@@ -81,26 +97,10 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
         description: "Could not get a response from the AI.",
         variant: "destructive",
       });
-      setStatus("idle");
-      // eslint-disable-next-line @typescript-eslint/no-use-before-define
-      setTimeout(startListening, 500); // Try to recover
+      isProcessingRef.current = false;
+      startListening();
     }
-  }, [chatHistory, reportSummary, toast, isMuted]);
-
-  const startListening = useCallback(() => {
-    if (isMuted || !recognitionRef.current) {
-      setStatus("idle");
-      return;
-    }
-    try {
-        transcriptRef.current = "";
-      recognitionRef.current.start();
-      setStatus("listening");
-    } catch (e) {
-      console.error("Recognition start error:", e);
-      // It might already be started, which is okay.
-    }
-  }, [isMuted]);
+  }, [chatHistory, reportSummary, toast, isMuted, startListening]);
 
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -116,7 +116,7 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
 
     recognitionRef.current = new SpeechRecognition();
     recognitionRef.current.continuous = true;
-    recognitionRef.current.interimResults = true; // Get results as user speaks
+    recognitionRef.current.interimResults = true;
 
     recognitionRef.current.onresult = (event) => {
         if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
@@ -132,39 +132,30 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
         }
         transcriptRef.current = finalTranscript || interimTranscript;
         
-        // Start a timer. If it fires, it means the user has paused.
         silenceTimerRef.current = setTimeout(() => {
-            recognitionRef.current?.stop();
-            processAndRespond(transcriptRef.current);
+            if (recognitionRef.current && status === 'listening') {
+                recognitionRef.current.stop(); // This will trigger 'onend'
+            }
         }, SILENCE_TIMEOUT);
     };
     
     recognitionRef.current.onerror = (event) => {
         console.error("Speech recognition error", event.error);
-        if (event.error === 'no-speech' && status === 'listening') {
-             // Let it auto-restart if needed
-        } else if (event.error !== 'aborted') {
-            setStatus("idle");
-        }
     };
 
     recognitionRef.current.onend = () => {
         if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
         
-        // Only restart if we are supposed to be listening and not muted
-        if (status === "listening" && !isMuted) {
-            // Check if we have a transcript to process that wasn't caught by the timer
-            if (transcriptRef.current.trim()) {
-                processAndRespond(transcriptRef.current);
-            } else {
-                // otherwise just restart listening
-                startListening();
-            }
+        if (transcriptRef.current.trim() && !isProcessingRef.current) {
+            processAndRespond(transcriptRef.current);
+        } else if (status === "listening" && !isMuted && !isProcessingRef.current) {
+            startListening();
         }
     };
 
     audioRef.current = new Audio();
     audioRef.current.onended = () => {
+      isProcessingRef.current = false;
       startListening();
     };
 
@@ -180,21 +171,24 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
       }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [processAndRespond]);
+  }, []);
 
   const handleMuteToggle = () => {
-    if (isMuted) {
-      setIsMuted(false);
-      startListening();
-    } else {
-      setIsMuted(true);
-      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-      recognitionRef.current?.stop();
-      if(status === 'speaking'){
-        stopSpeaking();
-      }
-      setStatus("idle");
-    }
+    setIsMuted(prevMuted => {
+        const newMutedState = !prevMuted;
+        if (newMutedState) { // Muting
+            if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+            recognitionRef.current?.stop();
+            if(status === 'speaking'){
+                stopSpeaking();
+                isProcessingRef.current = false;
+            }
+            setStatus("idle");
+        } else { // Un-muting
+            startListening();
+        }
+        return newMutedState;
+    });
   };
 
   const statusText = {

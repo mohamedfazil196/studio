@@ -10,6 +10,11 @@ import { textToSpeech } from "@/ai/flows/text-to-speech";
 
 // --- State Machine ---
 
+type Message = {
+  role: "user" | "bot";
+  content: string;
+};
+
 type State = {
   status: "idle" | "listening" | "thinking" | "speaking" | "muted";
   chatHistory: Message[];
@@ -34,34 +39,40 @@ const initialState: State = {
 function reducer(state: State, action: Action): State {
   switch (action.type) {
     case "START_LISTENING":
-      if (state.status === "idle" || state.status === "speaking" || state.status === "muted") {
+      // Can start listening from idle, after speaking, or when unmuting
+      if (["idle", "speaking", "muted"].includes(state.status)) {
         return { ...state, status: "listening" };
       }
       return state;
     case "STOP_LISTENING":
+       // Go to idle to await processing. The onend handler will trigger the next step.
       if (state.status === "listening") {
-        return { ...state, status: "idle" }; // Go to idle to await processing
+        return { ...state, status: "idle" };
       }
       return state;
     case "START_THINKING":
+      // Always transition to thinking after user speaks
       return {
         ...state,
         status: "thinking",
         chatHistory: [...state.chatHistory, action.userMessage],
       };
     case "BOT_RESPONSE":
+       // Add the bot's message to history. Status becomes 'speaking' or stays 'muted'.
+       const nextStatus = state.status === 'muted' ? 'muted' : 'speaking';
        return {
         ...state,
+        status: nextStatus,
         chatHistory: [...state.chatHistory, action.botMessage],
       };
     case "START_SPEAKING":
-       if (state.status === 'thinking' || state.status === 'muted') {
-         // If muted, we don't change state to 'speaking'. The response is added but not spoken.
-         if (state.status === 'muted') return state;
+       // This action is now handled by BOT_RESPONSE, but we keep it for clarity if needed.
+       if (state.status === 'thinking') {
          return {...state, status: 'speaking'};
        }
        return state;
     case "FINISH_SPEAKING":
+      // After speaking, go back to idle to start listening again
       if (state.status === "speaking") {
         return { ...state, status: "idle" };
       }
@@ -71,6 +82,7 @@ function reducer(state: State, action: Action): State {
     case "UNMUTE":
       return { ...state, status: "idle" }; // Go to idle to start listening again
     case "ERROR":
+      // On error, return to idle state, ready to listen again.
       return { ...state, status: "idle" };
     default:
       return state;
@@ -79,11 +91,6 @@ function reducer(state: State, action: Action): State {
 
 
 // --- Component ---
-
-type Message = {
-  role: "user" | "bot";
-  content: string;
-};
 
 interface LiveConversationProps {
   reportSummary: string;
@@ -97,6 +104,7 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const finalTranscriptRef = useRef("");
+  const isProcessingRef = useRef(false);
 
   // --- Core Actions ---
 
@@ -111,8 +119,7 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
   }, [state.status]);
 
   const startListening = useCallback(() => {
-    if (recognitionRef.current && state.status !== "listening") {
-      finalTranscriptRef.current = "";
+    if (recognitionRef.current && state.status !== "listening" && !isProcessingRef.current) {
       dispatch({ type: "START_LISTENING" });
       try {
         recognitionRef.current.start();
@@ -132,12 +139,14 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
     }
   }, [state.status]);
 
+
   const processAndRespond = useCallback(async (transcript: string) => {
-    if (!transcript.trim()) {
-      dispatch({ type: "ERROR" });
+    if (!transcript.trim() || isProcessingRef.current) {
+      dispatch({ type: "ERROR" }); // Go back to idle
       return;
     }
-
+    
+    isProcessingRef.current = true;
     const userMessage: Message = { role: "user", content: transcript };
     dispatch({ type: "START_THINKING", userMessage });
 
@@ -149,27 +158,22 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
       });
 
       const botMessage: Message = { role: "bot", content: questionResult.answer };
+      // This action adds the message and sets status to 'speaking' or 'muted'
       dispatch({ type: "BOT_RESPONSE", botMessage });
-      
-      if (state.status === 'muted') {
-         dispatch({ type: "FINISH_SPEAKING" }); // Just finish, don't speak
-         return;
-      }
-      
-      const ttsResult = await textToSpeech({ text: questionResult.answer });
 
-      if (ttsResult.audioDataUri) {
-        dispatch({ type: "START_SPEAKING" });
-        if (audioRef.current) {
+      // If we are not muted, proceed to speak the response.
+      if (state.status !== 'muted') {
+        const ttsResult = await textToSpeech({ text: questionResult.answer });
+        if (ttsResult.audioDataUri && audioRef.current) {
           audioRef.current.src = ttsResult.audioDataUri;
-          audioRef.current.play().catch(e => {
+          await audioRef.current.play().catch(e => {
                console.error("Audio playback failed:", e);
                dispatch({ type: "ERROR" });
           });
+        } else {
+          // If TTS fails (e.g., rate limit), we still "finish" speaking to transition state.
+          dispatch({ type: "FINISH_SPEAKING" });
         }
-      } else {
-        // TTS failed (e.g. rate limit), but we can still proceed
-        dispatch({ type: "FINISH_SPEAKING" });
       }
     } catch (error) {
       console.error("AI interaction failed:", error);
@@ -179,8 +183,14 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
         variant: "destructive",
       });
       dispatch({ type: "ERROR" });
+    } finally {
+        isProcessingRef.current = false;
+        // If we were muted, the bot responds silently, then we immediately go idle.
+        if(state.status === 'muted') {
+            dispatch({ type: "FINISH_SPEAKING" });
+        }
     }
-  }, [reportSummary, state.chatHistory, toast, state.status]);
+  }, [reportSummary, state.chatHistory, state.status, toast]);
 
   
   // --- Effects for Setup and State Transitions ---
@@ -198,24 +208,23 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
     }
 
     recognitionRef.current = new SpeechRecognition();
-    recognitionRef.current.continuous = false;
+    recognitionRef.current.continuous = false; // Process after each utterance
     recognitionRef.current.interimResults = true;
 
     recognitionRef.current.onresult = (event) => {
-      let interimTranscript = "";
       let finalTranscript = "";
       for (let i = event.resultIndex; i < event.results.length; ++i) {
         if (event.results[i].isFinal) {
           finalTranscript += event.results[i][0].transcript;
-        } else {
-          interimTranscript += event.results[i][0].transcript;
         }
       }
-      finalTranscriptRef.current = finalTranscript;
-      
-      // Barge-in: if user speaks while bot is speaking
-      if ((interimTranscript || finalTranscript) && state.status === "speaking") {
-        stopSpeaking();
+      if (finalTranscript) {
+          finalTranscriptRef.current = finalTranscript;
+          // Stop listening as soon as we have a final result
+          stopListening();
+      } else if (state.status === 'speaking') {
+          // Barge-in: User started speaking while bot was talking
+          stopSpeaking();
       }
     };
     
@@ -251,7 +260,7 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
 
   // Effect to automatically start listening when idle
   useEffect(() => {
-    if (state.status === "idle") {
+    if (state.status === "idle" && !isProcessingRef.current) {
         startListening();
     }
   }, [state.status, startListening])
@@ -269,6 +278,7 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
   };
 
   const handleStopListening = () => {
+    // This button directly triggers the recognition to stop, which then calls `onend`.
     stopListening();
   };
 
@@ -328,7 +338,7 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
             onClick={handleStopListening}
             disabled={state.status !== 'listening'}
             className={cn(
-                "w-20 h-20 rounded-full flex items-center justify-center bg-white text-black hover:bg-white/90 transition-all duration-300",
+                "w-20 h-20 rounded-full flex items-center justify-center bg-white text-black hover:bg-white/90 transition-all duration-300 disabled:bg-gray-400 disabled:scale-90",
                 state.status === 'listening' ? 'scale-100 opacity-100' : 'scale-0 opacity-0'
             )}
           >
@@ -346,3 +356,5 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
     </div>
   );
 }
+
+    

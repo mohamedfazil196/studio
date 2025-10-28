@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from 'react';
@@ -109,16 +110,11 @@ export function QAChat({ reportSummary }: QAChatProps) {
       recognition.interimResults = true;
 
       recognition.onresult = (event) => {
-        let interimTranscript = '';
         let finalTranscript = '';
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-          if (event.results[i].isFinal) {
+        for (let i = 0; i < event.results.length; i++) {
             finalTranscript += event.results[i][0].transcript;
-          } else {
-            interimTranscript += event.results[i][0].transcript;
-          }
         }
-        setInput(finalTranscript || interimTranscript);
+        setInput(finalTranscript);
       };
 
       recognition.onend = () => {
@@ -345,3 +341,5 @@ export function QAChat({ reportSummary }: QAChatProps) {
     </>
   );
 }
+
+    

@@ -106,14 +106,11 @@ const translateAndSpeakFlow = ai.defineFlow(
             audioDataUri: 'data:audio/wav;base64,' + wavBase64,
         };
 
-    } catch (error) {
+    } catch (error: any) {
         console.error("Text-to-speech failed, likely due to rate limits.", error);
-        // If TTS fails, still return the translated text but with an empty audio URI.
-        // The client-side will handle this gracefully.
-        return {
-            translatedText: translatedText,
-            audioDataUri: '',
-        };
+        // If TTS fails, re-throw an error so the client can handle it.
+        // We still provide the translated text in the error message for context.
+        throw new Error(`AI voice generation failed, but translation succeeded: ${translatedText}`);
     }
   }
 );

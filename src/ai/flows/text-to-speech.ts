@@ -89,11 +89,10 @@ const textToSpeechFlow = ai.defineFlow(
       return {
         audioDataUri: 'data:audio/wav;base64,' + wavBase64,
       };
-    } catch (error) {
+    } catch (error: any) {
         console.error("Text-to-speech failed, likely due to rate limits.", error);
-        // Return an empty data URI to prevent the app from crashing.
-        // The client-side will handle this gracefully.
-        return { audioDataUri: '' };
+        // Re-throw the error so the client can handle it properly.
+        throw new Error("AI voice generation failed. The service may be temporarily unavailable due to rate limits.");
     }
   }
 );

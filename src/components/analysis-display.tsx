@@ -64,6 +64,7 @@ export function AnalysisDisplay({ fileName, analysis }: AnalysisDisplayProps) {
   const { toast } = useToast();
   
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
 
   const handleStopSpeaking = useCallback(() => {
     if (audioRef.current && !audioRef.current.paused) {
@@ -81,36 +82,57 @@ export function AnalysisDisplay({ fileName, analysis }: AnalysisDisplayProps) {
     setIsPreparingAudio(true);
     
     try {
-        let audioDataUri = '';
-        let spokenText = text;
-
         if (lang === 'en') {
-            // For English, we can directly use a generic TTS flow
-            const result = await textToSpeech({ text });
-            audioDataUri = result.audioDataUri;
+            // Use browser's native TTS for English (unlimited)
+            if (typeof window === 'undefined' || !window.speechSynthesis) {
+                throw new Error("Speech synthesis is not supported in your browser.");
+            }
+            const utterance = new SpeechSynthesisUtterance(text);
+            utteranceRef.current = utterance;
+            utterance.onstart = () => setIsPlaying(true);
+            utterance.onend = () => setIsPlaying(false);
+            utterance.onerror = (e) => {
+                setIsPlaying(false);
+                toast({
+                    title: "Voice Error",
+                    description: "Could not play the audio.",
+                    variant: "destructive"
+                });
+            };
+            window.speechSynthesis.speak(utterance);
         } else {
-            // For other languages, we need to translate first, then speak
+            // Use AI TTS for other languages
             const result = await translateAndSpeak({ text: analysis.patientSummary, targetLanguage: lang });
-            audioDataUri = result.audioDataUri;
-            spokenText = result.translatedText; // Use the translated text from the flow
-        }
-        
-        setTranslatedSummary(spokenText);
+            const audioDataUri = result.audioDataUri;
+            
+            setTranslatedSummary(result.translatedText);
 
-        if (audioDataUri && audioRef.current) {
-            audioRef.current.src = audioDataUri;
-            audioRef.current.play();
-        } else {
-            throw new Error("AI voice generation failed. The service may be temporarily unavailable.");
+            if (audioDataUri && audioRef.current) {
+                audioRef.current.src = audioDataUri;
+                audioRef.current.play();
+            } else {
+                throw new Error("AI voice generation failed. The service may be temporarily unavailable.");
+            }
         }
-
     } catch (error: any) {
         console.error("AI speech error:", error);
-        toast({
-          title: "Voice Generation Failed",
-          description: error.message || "Could not generate audio, possibly due to service limits. Please try again in a moment.",
-          variant: "destructive"
-        });
+        
+        // Handle the specific case where translation succeeded but TTS failed
+        if (error.message.includes('translation succeeded')) {
+            const translatedText = error.message.split(': ')[1];
+            setTranslatedSummary(translatedText);
+             toast({
+              title: "Voice Generation Failed",
+              description: "Could not generate audio, but translation was successful.",
+              variant: "destructive"
+            });
+        } else {
+            toast({
+              title: "Voice Generation Failed",
+              description: error.message || "Could not generate audio. Please try again in a moment.",
+              variant: "destructive"
+            });
+        }
         setIsPlaying(false);
     } finally {
         setIsPreparingAudio(false);

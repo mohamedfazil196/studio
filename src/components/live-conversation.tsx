@@ -28,12 +28,20 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
-  const finalTranscriptRef = useRef('');
 
-  // Main processing function
+  const stopSpeaking = useCallback(() => {
+    if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.src = "";
+    }
+    if (status === 'speaking') {
+        setStatus('idle');
+    }
+  }, [status]);
+  
   const processAndRespond = useCallback(async (transcript: string) => {
     if (!transcript.trim()) {
-      setStatus("idle"); // Go back to idle if there's nothing to process
+      setStatus("idle");
       return;
     }
 
@@ -80,7 +88,13 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
     }
   }, [chatHistory, reportSummary, toast, isMuted]);
 
-  // Effect to manage speech recognition lifecycle
+  const startListening = useCallback(() => {
+    if (recognitionRef.current && status === 'idle' && !isMuted) {
+        setStatus('listening');
+        recognitionRef.current.start();
+    }
+  }, [status, isMuted]);
+
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
@@ -93,98 +107,80 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
       return;
     }
 
-    if (!recognitionRef.current) {
-        recognitionRef.current = new SpeechRecognition();
-        recognitionRef.current.continuous = true;
-        recognitionRef.current.interimResults = true;
+    recognitionRef.current = new SpeechRecognition();
+    recognitionRef.current.continuous = false;
+    recognitionRef.current.interimResults = true;
 
-        recognitionRef.current.onresult = (event) => {
-            let interimTranscript = '';
-            for (let i = event.resultIndex; i < event.results.length; ++i) {
-                if (event.results[i].isFinal) {
-                    finalTranscriptRef.current += event.results[i][0].transcript;
-                } else {
-                    interimTranscript += event.results[i][0].transcript;
-                }
-            }
-            // Barge-in: if user starts speaking while bot is speaking
-            if (status === 'speaking' && (interimTranscript.length > 0 || finalTranscriptRef.current.length > 0)) {
-                if (audioRef.current) {
-                  audioRef.current.pause();
-                }
-            }
-        };
-        
-        recognitionRef.current.onerror = (event) => {
-            if (event.error !== 'no-speech' && event.error !== 'aborted' && event.error !== 'network') {
-                console.error("Speech recognition error:", event.error);
-            }
-        };
+    let finalTranscript = '';
 
-        recognitionRef.current.onend = () => {
-            if (status === 'listening') {
-                 const transcriptToProcess = finalTranscriptRef.current.trim();
-                 processAndRespond(transcriptToProcess);
-            } else if (status !== 'thinking' && status !== 'speaking') {
-                setStatus('idle');
+    recognitionRef.current.onresult = (event) => {
+        let interimTranscript = '';
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+            if (event.results[i].isFinal) {
+                finalTranscript += event.results[i][0].transcript;
+            } else {
+                interimTranscript += event.results[i][0].transcript;
             }
-        };
-    }
-    
-    if (!audioRef.current) {
-        audioRef.current = new Audio();
-        audioRef.current.onended = () => setStatus('idle');
-        audioRef.current.onpause = () => {
-            // Only go to idle if we were in the speaking state
-            if (status === 'speaking') {
-                setStatus('idle');
-            }
-        };
-    }
-
-    if (status === 'idle' && !isMuted) {
-      finalTranscriptRef.current = '';
-      try {
-        recognitionRef.current.start();
-        setStatus("listening");
-      } catch (e) {
-        // Can happen if already started, just transition state
-        if (status !== 'listening') {
-          setStatus("listening");
         }
-      }
-    }
 
-    // Cleanup function
-    return () => {
-      recognitionRef.current?.abort();
-      if (audioRef.current) {
-        audioRef.current.pause();
-      }
+        if(interimTranscript.length > 0 && status === 'speaking') {
+            stopSpeaking();
+        }
     };
-  }, [status, isMuted, onClose, processAndRespond, toast]);
+    
+    recognitionRef.current.onend = () => {
+        if (status === 'listening') {
+            processAndRespond(finalTranscript);
+            finalTranscript = '';
+        } else {
+            setStatus('idle');
+        }
+    };
+    
+    recognitionRef.current.onerror = (event) => {
+        if (event.error !== 'no-speech' && event.error !== 'aborted' && event.error !== 'network') {
+            console.error("Speech recognition error:", event.error);
+        }
+    };
+    
+    audioRef.current = new Audio();
+    audioRef.current.onended = () => setStatus('idle');
+
+    return () => {
+        recognitionRef.current?.abort();
+        if(audioRef.current) {
+            audioRef.current.pause();
+        }
+    }
+  }, [onClose, processAndRespond, status, stopSpeaking, toast]);
+
+  useEffect(() => {
+    startListening();
+  }, [startListening]);
 
   const handleMuteToggle = () => {
-    setIsMuted(prevMuted => {
-        const newMutedState = !prevMuted;
-        if (newMutedState) { // Muting
-            recognitionRef.current?.abort();
-            if (audioRef.current) {
-              audioRef.current.pause();
-            }
-            setStatus("idle"); // force idle state
-        } else { // Un-muting
-            setStatus("idle"); // Transition to idle to trigger listening
-        }
-        return newMutedState;
-    });
+    const nextMuted = !isMuted;
+    setIsMuted(nextMuted);
+    if(nextMuted) {
+        recognitionRef.current?.abort();
+        stopSpeaking();
+        setStatus('idle');
+    } else {
+        setStatus('idle');
+    }
   };
 
   const handleStopListening = () => {
     if (status === 'listening' && recognitionRef.current) {
-        recognitionRef.current.stop(); // This will trigger onend and processing
+        recognitionRef.current.stop();
     }
   };
+
+  const handleClose = () => {
+    stopSpeaking();
+    recognitionRef.current?.abort();
+    onClose();
+  }
 
   const statusText = {
       idle: "Tap the mic to speak",
@@ -194,7 +190,7 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 flex flex-col items-center justify-center animate-fade-in" onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="fixed inset-0 z-50 bg-black/80 flex flex-col items-center justify-center animate-fade-in" onClick={(e) => e.target === e.currentTarget && handleClose()}>
       <div className="w-full h-full flex flex-col items-center justify-center p-4">
         
         {/* Animated Orb */}
@@ -241,7 +237,7 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
           </button>
 
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="w-16 h-16 rounded-full flex items-center justify-center bg-red-600/80 text-white hover:bg-red-600 transition-colors"
           >
             <X size={28} />
@@ -251,3 +247,5 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
     </div>
   );
 }
+
+    

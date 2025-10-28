@@ -20,8 +20,6 @@ interface LiveConversationProps {
   onClose: () => void;
 }
 
-const SILENCE_TIMEOUT = 1000; // 1 second
-
 export function LiveConversation({ reportSummary, onClose }: LiveConversationProps) {
   const [status, setStatus] = useState<ConversationStatus>("idle");
   const [chatHistory, setChatHistory] = useState<Message[]>([]);
@@ -142,8 +140,9 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
     };
     
     recognitionRef.current.onerror = (event) => {
-        if (event.error !== 'no-speech' && event.error !== 'aborted') {
-            console.error("Speech recognition error", event.error);
+        // Ignore common, non-critical errors like 'no-speech', 'aborted', or transient 'network' issues.
+        if (event.error !== 'no-speech' && event.error !== 'aborted' && event.error !== 'network') {
+            console.error("Speech recognition error:", event.error);
         }
     };
 

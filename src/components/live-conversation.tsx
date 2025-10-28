@@ -6,7 +6,6 @@ import { X, Mic, MicOff, Square, Bot, User, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { askQuestion } from "@/ai/flows/enable-interactive-q-and-a";
-import { Button } from "./ui/button";
 import { ScrollArea } from "./ui/scroll-area";
 import { Avatar, AvatarFallback } from "./ui/avatar";
 
@@ -35,9 +34,10 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
   const [status, setStatus] = useState<Status>("idle");
   const [chatHistory, setChatHistory] = useState<Message[]>([]);
   const { toast } = useToast();
-
-  const recognitionRef = useRef<SpeechRecognition | null>(null);
   
+  const finalTranscriptRef = useRef<string>('');
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
+
   const speakText = useCallback((text: string) => {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
     
@@ -74,7 +74,7 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
         const result = await askQuestion({
           reportSummary,
           question: transcript,
-          chatHistory: updatedHistory, 
+          chatHistory: updatedHistory.map(m => ({ role: m.role, content: m.content })),
         });
 
         if (!result || !result.answer) {
@@ -93,7 +93,7 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
           description: "Could not get a response. Please try again.",
           variant: "destructive"
         });
-        setChatHistory(prev => prev.slice(0, -1));
+        // Do not remove the user message, so they can see what they asked
       }
     }, [chatHistory, reportSummary, speakText, toast]);
 
@@ -103,64 +103,82 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
     }
   }, []);
 
+  const handleManualStop = () => {
+    if (status === 'listening') {
+      stopListening();
+    }
+  }
+
   const startListening = useCallback(() => {
-    if (status === 'listening' || !recognitionRef.current) {
+    if (status !== 'idle' && status !== 'muted' && status !== 'error') {
       return;
     }
     window.speechSynthesis.cancel();
+    finalTranscriptRef.current = '';
+
+    if (!recognitionRef.current) {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+          toast({
+            title: "Browser Not Supported",
+            description: "Live conversation is not available on this browser.",
+            variant: "destructive",
+          });
+          onClose();
+          return;
+        }
+        
+        const recognition = new SpeechRecognition();
+        recognitionRef.current = recognition;
+        recognition.continuous = true;
+        recognition.interimResults = true;
+
+        recognition.onstart = () => setStatus("listening");
+        
+        recognition.onerror = (event) => {
+          if (event.error !== 'no-speech' && event.error !== 'aborted') {
+            console.error("Speech recognition error:", event.error);
+            setStatus("error");
+          }
+        };
+        
+        recognition.onend = () => {
+            setStatus(currentStatus => {
+                if (currentStatus === 'listening') {
+                    if (finalTranscriptRef.current) {
+                        processAndRespond(finalTranscriptRef.current);
+                        return 'thinking';
+                    }
+                    return 'idle';
+                }
+                return currentStatus;
+            });
+        };
+
+        recognition.onresult = (event) => {
+          let interimTranscript = '';
+          for (let i = event.resultIndex; i < event.results.length; ++i) {
+            if (event.results[i].isFinal) {
+              finalTranscriptRef.current += event.results[i][0].transcript;
+            } else {
+              interimTranscript += event.results[i][0].transcript;
+            }
+          }
+        };
+    }
+    
     try {
       recognitionRef.current.start();
     } catch(e) {
       // Already started, ignore
     }
-  }, [status]);
+  }, [status, processAndRespond, onClose, toast]);
   
   useEffect(() => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      toast({
-        title: "Browser Not Supported",
-        description: "Live conversation is not available on this browser.",
-        variant: "destructive",
-      });
-      onClose();
-      return;
-    }
-
-    const recognition = new SpeechRecognition();
-    recognitionRef.current = recognition;
-    recognition.continuous = false;
-    recognition.interimResults = false;
-
-    recognition.onstart = () => setStatus("listening");
-    recognition.onend = () => {
-        // This check prevents moving to 'idle' if we are already 'thinking'
-        setStatus(currentStatus => currentStatus === 'listening' ? 'idle' : currentStatus);
-    }
-    recognition.onerror = (event) => {
-      if (event.error !== 'no-speech' && event.error !== 'aborted') {
-        console.error("Speech recognition error:", event.error);
-        setStatus("error");
-      }
-    };
-    recognition.onresult = (event) => {
-      const transcript = event.results[0][0].transcript.trim();
-      if (transcript) {
-        processAndRespond(transcript);
-      }
-    };
-
-    return () => {
-      recognition.stop();
-      window.speechSynthesis.cancel();
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [processAndRespond]); 
-
-  useEffect(() => {
+    // Automatically start listening when the component is ready and not muted
     if (status === "idle") {
-      const timer = setTimeout(() => startListening(), 100);
-      return () => clearTimeout(timer);
+        const timer = setTimeout(() => startListening(), 250); // Small delay
+        return () => clearTimeout(timer);
     }
   }, [status, startListening]);
 
@@ -251,14 +269,14 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
           </button>
           
           <button
-            onClick={startListening}
-            disabled={status === 'listening' || status === 'thinking' || status === 'speaking'}
-            aria-label="Start Listening"
+            onClick={status === 'listening' ? handleManualStop : startListening}
+            disabled={status === 'thinking' || status === 'speaking'}
+            aria-label={status === 'listening' ? 'Stop Listening' : 'Start Listening'}
             className={cn(
                 "w-20 h-20 rounded-full flex items-center justify-center bg-white text-black hover:bg-white/90 transition-all duration-300 disabled:bg-gray-400 disabled:scale-90",
             )}
           >
-            <Mic size={32} />
+            {status === 'listening' ? <Square size={28} /> : <Mic size={32} />}
           </button>
 
           <button

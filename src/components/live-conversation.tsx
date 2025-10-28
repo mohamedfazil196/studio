@@ -39,11 +39,14 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
   const recognitionRef = useRef<SpeechRecognition | null>(null);
 
   const speakText = useCallback((text: string) => {
-    if (typeof window === 'undefined' || !window.speechSynthesis) return;
+    if (typeof window === 'undefined' || !window.speechSynthesis) {
+        setStatus('idle');
+        return;
+    }
     
     window.speechSynthesis.cancel();
     
-    const cleanText = text.replace(/\*\*/g, '');
+    const cleanText = text.replace(/\*\*|[*]/g, '');
     const utterance = new SpeechSynthesisUtterance(cleanText);
     
     utterance.onstart = () => setStatus("speaking");
@@ -68,7 +71,6 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
   
       setStatus("thinking");
       const userMessage: Message = { role: 'user', content: transcript };
-      
       const updatedHistory = [...chatHistory, userMessage];
       setChatHistory(updatedHistory);
   
@@ -90,14 +92,12 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
       } catch (error) {
         console.error("Error processing AI response:", error);
         setStatus("error");
-        setChatHistory(prev => prev.filter(m => m.role !== 'user' || m.content !== transcript));
-        toast({
-          title: "AI Error",
-          description: "Could not get a response. Please try again.",
-          variant: "destructive"
-        });
+        const botMessage: Message = { role: "bot", content: "I'm sorry, I ran into an error. Please try again." };
+        setChatHistory(prev => [...prev, botMessage]);
+        speakText(botMessage.content);
       }
     }, [chatHistory, reportSummary, speakText, toast]);
+  
   
   const stopAndProcess = useCallback(() => {
     if (recognitionRef.current && status === 'listening') {
@@ -115,68 +115,92 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
     finalTranscriptRef.current = '';
 
     if (!recognitionRef.current) {
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (!SpeechRecognition) {
-          toast({
-            title: "Browser Not Supported",
-            description: "Live conversation is not available on this browser.",
+        toast({
+            title: "Live Conversation Unavailable",
+            description: "Speech recognition is not supported on this browser.",
             variant: "destructive",
-          });
-          onClose();
-          return;
-        }
-        
-        const recognition = new SpeechRecognition();
-        recognitionRef.current = recognition;
-        recognition.continuous = true;
-        recognition.interimResults = true;
-
-        recognition.onstart = () => setStatus("listening");
-        
-        recognition.onerror = (event) => {
-          if (event.error !== 'no-speech' && event.error !== 'aborted') {
-            console.error("Speech recognition error:", event.error);
-            setStatus("error");
-          }
-        };
-        
-        recognition.onend = () => {
-            if (status === 'listening') {
-                processAndRespond(finalTranscriptRef.current);
-            }
-        };
-
-        recognition.onresult = (event) => {
-          finalTranscriptRef.current = '';
-          for (let i = 0; i < event.results.length; ++i) {
-             finalTranscriptRef.current += event.results[i][0].transcript;
-          }
-        };
+        });
+        onClose();
+        return;
     }
     
     try {
       recognitionRef.current.start();
     } catch(e) {
        console.error("Could not start recognition", e);
+       if (status !== 'listening') {
+           setStatus('idle');
+       }
     }
-  }, [status, processAndRespond, onClose, toast]);
-  
+  }, [status, onClose, toast]);
+
   useEffect(() => {
-    if (status === "idle") {
-        const timer = setTimeout(() => startListening(), 250);
-        return () => clearTimeout(timer);
-    }
-  }, [status, startListening]);
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+          return;
+      }
+      
+      recognitionRef.current = new SpeechRecognition();
+      const recognition = recognitionRef.current;
+      recognition.continuous = true;
+      recognition.interimResults = true;
+
+      recognition.onstart = () => setStatus("listening");
+      
+      recognition.onerror = (event) => {
+        if (event.error === 'no-speech') {
+            // Ignore no-speech errors, let the `onend` handle it.
+            return;
+        }
+        if (event.error !== 'aborted') {
+          console.error("Speech recognition error:", event.error);
+          setStatus("error");
+        }
+      };
+      
+      recognition.onend = () => {
+          if (status === 'listening') {
+              processAndRespond(finalTranscriptRef.current);
+          }
+      };
+
+      recognition.onresult = (event) => {
+        let interimTranscript = '';
+        finalTranscriptRef.current = '';
+        for (let i = 0; i < event.results.length; ++i) {
+            if (event.results[i].isFinal) {
+                finalTranscriptRef.current += event.results[i][0].transcript;
+            } else {
+                interimTranscript += event.results[i][0].transcript;
+            }
+        }
+      };
+      
+      const timer = setTimeout(() => startListening(), 250);
+
+      return () => {
+          clearTimeout(timer);
+          if (recognitionRef.current) {
+            recognitionRef.current.onstart = null;
+            recognitionRef.current.onerror = null;
+            recognitionRef.current.onend = null;
+            recognitionRef.current.onresult = null;
+            recognitionRef.current.abort();
+          }
+          window.speechSynthesis.cancel();
+      }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleMuteToggle = () => {
     if (status === "muted") {
       setStatus("idle");
+      startListening();
     } else {
       if (status === 'listening') {
-          stopAndProcess();
-      }
-      if(status === 'speaking'){
-          window.speechSynthesis.cancel();
+        stopAndProcess();
+      } else if (status === 'speaking'){
+        window.speechSynthesis.cancel();
       }
       setStatus("muted");
     }
@@ -192,8 +216,7 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
   
   const handleClose = () => {
     if (recognitionRef.current) {
-        recognitionRef.current.onend = null;
-        recognitionRef.current.stop();
+        recognitionRef.current.abort();
     }
     window.speechSynthesis.cancel();
     onClose();
@@ -292,3 +315,5 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
     </div>
   );
 }
+
+    

@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { X, Mic, MicOff, Square, Bot, User } from "lucide-react";
+import { X, Mic, MicOff, Square, Bot, User, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { askQuestion } from "@/ai/flows/enable-interactive-q-and-a";
@@ -37,102 +37,87 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
   const { toast } = useToast();
 
   const recognitionRef = useRef<SpeechRecognition | null>(null);
-  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
-  const transcriptRef = useRef("");
-  const isProcessingRef = useRef(false);
-
-  const stopSpeaking = useCallback(() => {
-    if (typeof window !== 'undefined' && window.speechSynthesis.speaking) {
-      window.speechSynthesis.cancel();
-      if (status === 'speaking') {
-          setStatus("idle");
-      }
-    }
-  }, [status]);
   
+  const speakText = useCallback((text: string) => {
+    if (typeof window === 'undefined' || !window.speechSynthesis) return;
+    
+    // Cancel any ongoing speech
+    window.speechSynthesis.cancel();
+    
+    const cleanText = text.replace(/\*\*/g, '');
+    const utterance = new SpeechSynthesisUtterance(cleanText);
+    
+    utterance.onstart = () => setStatus("speaking");
+    utterance.onend = () => setStatus("idle");
+    utterance.onerror = (e) => {
+        console.error("Speech synthesis error", e);
+        setStatus("idle");
+        toast({
+            title: "Voice Error",
+            description: e.error || "Could not play audio.",
+            variant: "destructive"
+        });
+    };
+    window.speechSynthesis.speak(utterance);
+  }, [toast]);
+
   const processAndRespond = useCallback(async (transcript: string) => {
-      if (!transcript || isProcessingRef.current) {
-        if (!isProcessingRef.current) setStatus("idle");
+      if (!transcript) {
+        setStatus("idle");
         return;
       }
   
-      isProcessingRef.current = true;
       setStatus("thinking");
-  
       const userMessage: Message = { role: 'user', content: transcript };
-      // Use functional update to ensure we have the latest chat history
-      setChatHistory(prev => [...prev, userMessage]);
+      const updatedHistory = [...chatHistory, userMessage];
+      setChatHistory(updatedHistory);
   
       try {
         const result = await askQuestion({
           reportSummary,
           question: transcript,
-          // Pass the most up-to-date history
-          chatHistory: [...chatHistory, userMessage], 
+          chatHistory: updatedHistory, 
         });
+
+        if (!result || !result.answer) {
+             throw new Error("AI did not return an answer.");
+        }
+
         const botMessage: Message = { role: "bot", content: result.answer };
         setChatHistory(prev => [...prev, botMessage]);
-  
-        isProcessingRef.current = false;
-        
-        if (status === 'muted') {
-            setStatus('muted');
-            return;
-        }
-
-        if (typeof window !== 'undefined' && window.speechSynthesis) {
-          stopSpeaking();
-          const cleanText = result.answer.replace(/\*\*/g, '');
-          const utterance = new SpeechSynthesisUtterance(cleanText);
-          utteranceRef.current = utterance;
-          
-          utterance.onstart = () => setStatus("speaking");
-          utterance.onend = () => setStatus("idle");
-          utterance.onerror = (e) => {
-              console.error("Speech synthesis error", e);
-              setStatus("idle");
-              toast({
-                  title: "Voice Error",
-                  description: e.error || "Could not play audio.",
-                  variant: "destructive"
-              });
-          };
-          window.speechSynthesis.speak(utterance);
-        }
+        speakText(result.answer);
 
       } catch (error) {
-        console.error("Error during processing/responding:", error);
-        isProcessingRef.current = false;
+        console.error("Error processing AI response:", error);
         setStatus("error");
+        toast({
+          title: "AI Error",
+          description: "Could not get a response. Please try again.",
+          variant: "destructive"
+        });
+        // Remove the user message that caused the error to prevent clutter
+        setChatHistory(prev => prev.slice(0, -1));
       }
-    }, [chatHistory, reportSummary, status, stopSpeaking, toast]);
-
-  const startListening = useCallback(() => {
-    if (isProcessingRef.current || status === "listening" || status === "speaking") {
-      return;
-    }
-    stopSpeaking();
-    
-    if (recognitionRef.current) {
-        try {
-            transcriptRef.current = "";
-            recognitionRef.current.start();
-        } catch (e) {
-            // Already started, it's fine.
-        }
-    }
-  }, [status, stopSpeaking]);
+    }, [chatHistory, reportSummary, speakText, toast]);
 
   const stopListening = useCallback(() => {
-    if (recognitionRef.current && status === "listening") {
-        try {
-            recognitionRef.current.stop();
-        } catch (e) {
-            // Can throw if not active, which is fine
-        }
+    if (recognitionRef.current) {
+        recognitionRef.current.stop();
+    }
+  }, []);
+
+  const startListening = useCallback(() => {
+    if (status === 'listening' || !recognitionRef.current) {
+      return;
+    }
+    window.speechSynthesis.cancel();
+    try {
+      recognitionRef.current.start();
+    } catch(e) {
+      // Already started, ignore
     }
   }, [status]);
-
+  
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
@@ -147,67 +132,52 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
 
     const recognition = new SpeechRecognition();
     recognitionRef.current = recognition;
-    recognition.continuous = false; // Important: Process speech after each pause
+    recognition.continuous = false;
     recognition.interimResults = false;
 
-    recognition.onstart = () => {
-        setStatus("listening");
-    };
-
-    recognition.onresult = (event) => {
-        const transcript = event.results[0][0].transcript;
-        transcriptRef.current = transcript;
-    };
-    
-    recognition.onend = () => {
-      // Only process if we were actually listening and not manually stopped to be muted etc.
-      if (status === 'listening' && !isProcessingRef.current) {
-         const finalTranscript = transcriptRef.current.trim();
-         if (finalTranscript) {
-            processAndRespond(finalTranscript);
-         } else {
-            // No speech detected, go back to idle
-            setStatus('idle');
-         }
-      }
-    };
-    
+    recognition.onstart = () => setStatus("listening");
+    recognition.onend = () => setStatus(currentStatus => currentStatus === 'listening' ? 'idle' : currentStatus);
     recognition.onerror = (event) => {
       if (event.error !== 'no-speech' && event.error !== 'aborted') {
         console.error("Speech recognition error:", event.error);
-        toast({ title: "Speech Error", description: event.error, variant: 'destructive' });
+        setStatus("error");
       }
-      setStatus("error");
     };
-    
+    recognition.onresult = (event) => {
+      const transcript = event.results[0][0].transcript.trim();
+      if (transcript) {
+        processAndRespond(transcript);
+      }
+    };
+
     return () => {
-        stopListening();
-        stopSpeaking();
+      recognition.stop();
+      window.speechSynthesis.cancel();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Run only once
+  }, [processAndRespond]); 
 
-  // Auto-start listening when component becomes idle, except when muted or in error state
   useEffect(() => {
-    if (status === "idle" && status !== 'muted' && status !== 'error') {
-      const timer = setTimeout(() => startListening(), 100); // Small delay
+    // Auto-start listening loop
+    if (status === "idle") {
+      const timer = setTimeout(() => startListening(), 100);
       return () => clearTimeout(timer);
     }
   }, [status, startListening]);
 
   const handleMuteToggle = () => {
     if (status === "muted") {
-      setStatus("idle");
+      setStatus("idle"); // Go back to listening loop
     } else {
-      stopSpeaking();
       stopListening();
+      window.speechSynthesis.cancel();
       setStatus("muted");
     }
   };
   
   const handleClose = () => {
     stopListening();
-    stopSpeaking();
+    window.speechSynthesis.cancel();
     onClose();
   }
 
@@ -215,7 +185,6 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
     <div className="fixed inset-0 z-50 bg-black/80 flex flex-col items-center justify-center animate-fade-in" onClick={(e) => e.target === e.currentTarget && handleClose()}>
       <div className="w-full h-full max-w-4xl flex flex-col items-center justify-center p-4">
         
-        {/* Chat history display */}
         <div className="w-full h-1/2 flex-shrink-0">
           <ScrollArea className="h-full pr-4">
               <div className="space-y-4">
@@ -249,31 +218,30 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
           </ScrollArea>
         </div>
 
-
-        {/* Animated status orb */}
         <div className="relative flex items-center justify-center w-64 h-64 my-4">
             <div className={cn(
                 "absolute rounded-full bg-primary/20 transition-all duration-500",
                 status === 'listening' && 'w-64 h-64 animate-pulse',
                 status === 'speaking' && 'w-56 h-56 animate-pulse',
-                status === 'thinking' && 'w-48 h-48 animate-spin-slow',
+                status === 'thinking' && 'w-48 h-48',
                 (status === 'idle' || status === 'muted' || status === 'error') && 'w-48 h-48',
             )}></div>
             <div className={cn(
                 "absolute rounded-full bg-primary/40 transition-all duration-500",
                 status === 'listening' && 'w-56 h-56 animate-pulse [animation-delay:100ms]',
                 status === 'speaking' && 'w-48 h-48 animate-pulse [animation-delay:100ms]',
-                status === 'thinking' && 'w-40 h-40 animate-spin-slow [animation-direction:reverse]',
+                status === 'thinking' && 'w-40 h-40',
                 (status === 'idle' || status === 'muted' || status === 'error') && 'w-40 h-40',
             )}></div>
-            <div className="absolute rounded-full w-32 h-32 bg-primary"></div>
+            <div className="absolute rounded-full w-32 h-32 bg-primary flex items-center justify-center">
+              {status === 'thinking' && <Loader2 className="w-12 h-12 text-primary-foreground animate-spin" />}
+            </div>
         </div>
 
         <p className="text-xl text-white/80 h-8 transition-opacity duration-300">
           {statusText[status]}
         </p>
         
-        {/* Controls */}
         <div className="absolute bottom-10 flex items-center justify-center w-full gap-6">
           <button
             onClick={handleMuteToggle}
@@ -306,5 +274,3 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
     </div>
   );
 }
-
-    

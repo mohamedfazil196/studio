@@ -12,6 +12,7 @@ import { ScrollArea } from "./ui/scroll-area";
 import Link from 'next/link';
 import { QAChat } from "./qa-chat";
 import { translateText } from "@/ai/flows/translate-text";
+import { translateAndSpeak } from "@/ai/flows/translate-and-speak";
 
 type AnalysisDisplayProps = {
   fileName: string;
@@ -58,40 +59,65 @@ export function AnalysisDisplay({ fileName, analysis }: AnalysisDisplayProps) {
   const [translatedSummary, setTranslatedSummary] = useState(analysis.patientSummary);
   const [isTranslating, setIsTranslating] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isPreparingAudio, setIsPreparingAudio] = useState(false);
   const { toast } = useToast();
   
-  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const handleStopSpeaking = useCallback(() => {
-    if (typeof window !== 'undefined' && window.speechSynthesis.speaking) {
-      window.speechSynthesis.cancel();
-      setIsPlaying(false);
+    if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
     }
+    setIsPlaying(false);
   }, []);
 
-  const speakText = (text: string, lang: string) => {
-    if (typeof window === 'undefined' || !window.speechSynthesis) return;
-    
-    handleStopSpeaking();
-    
-    // Remove markdown for cleaner speech
-    const cleanText = text.replace(/\*\*/g, '');
-    const utterance = new SpeechSynthesisUtterance(cleanText);
-    utteranceRef.current = utterance;
-    utterance.lang = lang;
-    
-    utterance.onstart = () => setIsPlaying(true);
-    utterance.onend = () => setIsPlaying(false);
-    utterance.onerror = (e) => {
-      setIsPlaying(false);
-      toast({
-        title: "Voice Error",
-        description: e.error || "Could not play audio. Your browser might not support this language.",
-        variant: "destructive"
-      });
-    };
-
-    window.speechSynthesis.speak(utterance);
+  const speakText = async (text: string, lang: string) => {
+    if (lang === 'en') {
+      // Use browser TTS for English for speed, as it's generally well-supported.
+      if (typeof window === 'undefined' || !window.speechSynthesis) return;
+      handleStopSpeaking();
+      const cleanText = text.replace(/\*\*/g, '');
+      const utterance = new SpeechSynthesisUtterance(cleanText);
+      utterance.lang = lang;
+      utterance.onstart = () => setIsPlaying(true);
+      utterance.onend = () => setIsPlaying(false);
+      utterance.onerror = (e) => {
+        setIsPlaying(false);
+        toast({
+          title: "Voice Error",
+          description: "Could not play audio. Your browser might not support this language.",
+          variant: "destructive"
+        });
+      };
+      window.speechSynthesis.speak(utterance);
+    } else {
+      // Use server-side TTS for other languages
+      setIsPreparingAudio(true);
+      try {
+        const result = await translateAndSpeak({ text: analysis.patientSummary, targetLanguage: lang });
+        if (result.audioDataUri) {
+            setTranslatedSummary(result.translatedText);
+            if (audioRef.current) {
+                audioRef.current.src = result.audioDataUri;
+                audioRef.current.play();
+                setIsPlaying(true);
+            }
+        } else {
+             throw new Error("Text-to-speech did not return audio.");
+        }
+      } catch (error) {
+        console.error("AI speech error:", error);
+        toast({
+          title: "Voice Generation Failed",
+          description: "Could not generate audio for the selected language.",
+          variant: "destructive"
+        });
+        setIsPlaying(false);
+      } finally {
+        setIsPreparingAudio(false);
+      }
+    }
   };
 
 
@@ -130,9 +156,29 @@ export function AnalysisDisplay({ fileName, analysis }: AnalysisDisplayProps) {
   };
 
   useEffect(() => {
-    // Cleanup speechSynthesis on component unmount
+    // Setup audio element and its listeners
+    const audio = new Audio();
+    audioRef.current = audio;
+    
+    const onPlay = () => setIsPlaying(true);
+    const onPause = () => setIsPlaying(false);
+    const onEnded = () => setIsPlaying(false);
+
+    audio.addEventListener('play', onPlay);
+    audio.addEventListener('pause', onPause);
+    audio.addEventListener('ended', onEnded);
+    
+    // Cleanup on component unmount
     return () => {
       handleStopSpeaking();
+      if (audio) {
+        audio.removeEventListener('play', onPlay);
+        audio.removeEventListener('pause', onPause);
+        audio.removeEventListener('ended', onEnded);
+      }
+      if (typeof window !== 'undefined' && window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
     };
   }, [handleStopSpeaking]);
 
@@ -188,8 +234,8 @@ export function AnalysisDisplay({ fileName, analysis }: AnalysisDisplayProps) {
                                 ))}
                             </SelectContent>
                         </Select>
-                        <Button size="icon" variant="outline" onClick={handlePlayPause} disabled={isTranslating}>
-                            {isTranslating ? <Loader2 className="animate-spin" /> : isPlaying ? <Pause /> : <Play />}
+                        <Button size="icon" variant="outline" onClick={handlePlayPause} disabled={isTranslating || isPreparingAudio}>
+                            {isTranslating || isPreparingAudio ? <Loader2 className="animate-spin" /> : isPlaying ? <Pause /> : <Play />}
                             <span className="sr-only">Play or pause summary</span>
                         </Button>
                     </div>

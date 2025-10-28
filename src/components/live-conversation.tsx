@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { X, Mic, MicOff } from "lucide-react";
+import { X, Mic, MicOff, Square } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { askQuestion } from "@/ai/flows/enable-interactive-q-and-a";
@@ -29,6 +29,7 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const isProcessingRef = useRef(false);
+  const finalTranscriptRef = useRef('');
 
   const stopSpeaking = useCallback(() => {
     if (audioRef.current) {
@@ -36,28 +37,25 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
       audioRef.current.currentTime = 0;
     }
   }, []);
-  
+
   const startListening = useCallback(() => {
-    if (isMuted || !recognitionRef.current || isProcessingRef.current) {
-      if (!isProcessingRef.current) setStatus("idle");
+    if (isMuted || !recognitionRef.current || isProcessingRef.current || status === 'listening') {
       return;
     }
     try {
+      finalTranscriptRef.current = '';
       recognitionRef.current.start();
       setStatus("listening");
     } catch (e) {
-        // Errors like "already started" can happen if logic overlaps.
-        // We will just ensure the status is correct.
-        if (status !== 'listening') {
-             setStatus("listening");
-        }
+      // Already started, ignore
     }
   }, [isMuted, status]);
 
   const processAndRespond = useCallback(async (transcript: string) => {
     if (isProcessingRef.current || !transcript.trim()) {
-        if(!isProcessingRef.current) startListening();
-        return;
+      isProcessingRef.current = false;
+      startListening();
+      return;
     }
     
     isProcessingRef.current = true;
@@ -121,16 +119,29 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
     }
 
     recognitionRef.current = new SpeechRecognition();
-    recognitionRef.current.continuous = false; // We will manually restart it.
-    recognitionRef.current.interimResults = false;
+    recognitionRef.current.continuous = true; // Keep listening
+    recognitionRef.current.interimResults = true; // Get results as user speaks
 
     recognitionRef.current.onresult = (event) => {
         stopSpeaking();
-        const transcript = event.results[event.results.length - 1][0].transcript.trim();
-        if (transcript) {
-            processAndRespond(transcript);
-        } else {
-            startListening();
+        let interimTranscript = '';
+        finalTranscriptRef.current = '';
+        for (let i = 0; i < event.results.length; ++i) {
+            if (event.results[i].isFinal) {
+                finalTranscriptRef.current += event.results[i][0].transcript;
+            } else {
+                interimTranscript += event.results[i][0].transcript;
+            }
+        }
+        
+        // Barge-in: if user starts speaking while bot is speaking
+        if (status === 'speaking' && (interimTranscript.length > 0 || finalTranscriptRef.current.length > 0)) {
+            stopSpeaking();
+        }
+
+        // When a final result is received, we stop recognition and process
+        if (finalTranscriptRef.current.trim() && recognitionRef.current) {
+            recognitionRef.current.stop();
         }
     };
     
@@ -141,7 +152,14 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
     };
 
     recognitionRef.current.onend = () => {
-        if (!isProcessingRef.current) {
+        if (isProcessingRef.current) return;
+
+        const transcriptToProcess = finalTranscriptRef.current.trim();
+        if (transcriptToProcess) {
+            setStatus('thinking');
+            processAndRespond(transcriptToProcess);
+        } else {
+            setStatus('idle');
             startListening();
         }
     };
@@ -149,13 +167,15 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
     audioRef.current = new Audio();
     audioRef.current.onended = () => {
       isProcessingRef.current = false;
+      setStatus('idle');
       startListening();
     };
     audioRef.current.onpause = () => {
-        if (status === 'speaking') {
-             isProcessingRef.current = false;
-             startListening();
-        }
+      if (status === 'speaking') {
+           isProcessingRef.current = false;
+           setStatus('idle');
+           startListening();
+      }
     };
 
     startListening();
@@ -181,6 +201,12 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
         }
         return newMutedState;
     });
+  };
+
+  const handleStopListening = () => {
+    if (status === 'listening' && recognitionRef.current) {
+        recognitionRef.current.stop(); // This will trigger onend and processing
+    }
   };
 
   const statusText = {
@@ -218,13 +244,25 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
         </p>
         
         {/* Controls */}
-        <div className="absolute bottom-10 flex items-center gap-6">
+        <div className="absolute bottom-10 flex items-center justify-center w-full gap-6">
           <button
             onClick={handleMuteToggle}
             className="w-16 h-16 rounded-full flex items-center justify-center bg-white/10 text-white hover:bg-white/20 transition-colors"
           >
             {isMuted ? <MicOff size={28} /> : <Mic size={28} />}
           </button>
+          
+          <button
+            onClick={handleStopListening}
+            disabled={status !== 'listening'}
+            className={cn(
+                "w-20 h-20 rounded-full flex items-center justify-center bg-white text-black hover:bg-white/90 transition-all scale-100 disabled:scale-0",
+                status === 'listening' ? 'opacity-100' : 'opacity-0'
+            )}
+          >
+            <Square size={32} />
+          </button>
+
           <button
             onClick={onClose}
             className="w-16 h-16 rounded-full flex items-center justify-center bg-red-600/80 text-white hover:bg-red-600 transition-colors"

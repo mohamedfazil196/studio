@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ScrollArea } from "./ui/scroll-area";
 import Link from 'next/link';
 import { QAChat } from "./qa-chat";
+import { translateText } from "@/ai/flows/translate-text";
 
 type AnalysisDisplayProps = {
   fileName: string;
@@ -105,20 +106,8 @@ export function AnalysisDisplay({ fileName, analysis }: AnalysisDisplayProps) {
 
       setIsTranslating(true);
       try {
-        // Use Genkit flow for translation only, not for speech.
-        const { text: translatedText } = await (await fetch('/api/ai/generate', {
-            method: 'POST',
-            body: JSON.stringify({
-                prompt: `Translate the following text to the language specified by the code '${langCode}': ${analysis.patientSummary}`,
-                model: 'googleai/gemini-2.5-flash',
-            })
-        })).json();
-
-        if (!translatedText) {
-            throw new Error('Translation failed.');
-        }
-
-        setTranslatedSummary(translatedText);
+        const result = await translateText({ text: analysis.patientSummary, targetLanguage: langCode });
+        setTranslatedSummary(result.translatedText);
       } catch (error) {
           console.error('Translation error:', error);
           toast({

@@ -28,7 +28,6 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
-  const transcriptRef = useRef<string>("");
   const isProcessingRef = useRef(false);
 
   const stopSpeaking = useCallback(() => {
@@ -40,17 +39,20 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
   
   const startListening = useCallback(() => {
     if (isMuted || !recognitionRef.current || isProcessingRef.current) {
-        if (!isProcessingRef.current) setStatus("idle");
-        return;
+      if (!isProcessingRef.current) setStatus("idle");
+      return;
     }
     try {
-        transcriptRef.current = "";
-        recognitionRef.current.start();
-        setStatus("listening");
+      recognitionRef.current.start();
+      setStatus("listening");
     } catch (e) {
-        // Errors like "already started" can be ignored.
+        // Errors like "already started" can happen if logic overlaps.
+        // We will just ensure the status is correct.
+        if (status !== 'listening') {
+             setStatus("listening");
+        }
     }
-  }, [isMuted]);
+  }, [isMuted, status]);
 
   const processAndRespond = useCallback(async (transcript: string) => {
     if (isProcessingRef.current || !transcript.trim()) {
@@ -85,7 +87,10 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
       if (audioRef.current && ttsResult.audioDataUri) {
         setStatus("speaking");
         audioRef.current.src = ttsResult.audioDataUri;
-        audioRef.current.play();
+        audioRef.current.play().catch(() => {
+             isProcessingRef.current = false;
+             startListening();
+        });
       } else {
         isProcessingRef.current = false;
         startListening();
@@ -102,6 +107,7 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
     }
   }, [chatHistory, reportSummary, toast, isMuted, startListening]);
 
+
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
@@ -115,41 +121,27 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
     }
 
     recognitionRef.current = new SpeechRecognition();
-    recognitionRef.current.continuous = true;
-    recognitionRef.current.interimResults = true;
+    recognitionRef.current.continuous = false; // We will manually restart it.
+    recognitionRef.current.interimResults = false;
 
     recognitionRef.current.onresult = (event) => {
-        if (status === 'speaking') {
-            stopSpeaking();
-        }
-        if (status !== 'listening' && !isProcessingRef.current) {
-            setStatus('listening');
-        }
-
-        let finalTranscript = '';
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-            if (event.results[i].isFinal) {
-                finalTranscript += event.results[i][0].transcript;
-            }
-        }
-        
-        if (finalTranscript && recognitionRef.current) {
-            transcriptRef.current = finalTranscript;
-            recognitionRef.current.stop(); // Stop listening once a final result is in.
+        stopSpeaking();
+        const transcript = event.results[event.results.length - 1][0].transcript.trim();
+        if (transcript) {
+            processAndRespond(transcript);
+        } else {
+            startListening();
         }
     };
     
     recognitionRef.current.onerror = (event) => {
-        // Ignore common, non-critical errors like 'no-speech', 'aborted', or transient 'network' issues.
         if (event.error !== 'no-speech' && event.error !== 'aborted' && event.error !== 'network') {
             console.error("Speech recognition error:", event.error);
         }
     };
 
     recognitionRef.current.onend = () => {
-        if (transcriptRef.current.trim() && !isProcessingRef.current) {
-            processAndRespond(transcriptRef.current);
-        } else if (!isProcessingRef.current && !isMuted) {
+        if (!isProcessingRef.current) {
             startListening();
         }
     };
@@ -159,12 +151,12 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
       isProcessingRef.current = false;
       startListening();
     };
-
-    audioRef.current.onplay = () => {
-        if(recognitionRef.current && !isMuted) {
-           // Barge-in logic is handled in onresult
+    audioRef.current.onpause = () => {
+        if (status === 'speaking') {
+             isProcessingRef.current = false;
+             startListening();
         }
-    }
+    };
 
     startListening();
 
@@ -181,10 +173,8 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
     setIsMuted(prevMuted => {
         const newMutedState = !prevMuted;
         if (newMutedState) { // Muting
-            recognitionRef.current?.stop();
-            if(status === 'speaking'){
-                stopSpeaking();
-            }
+            recognitionRef.current?.abort();
+            stopSpeaking();
             setStatus("idle");
         } else { // Un-muting
             startListening();

@@ -34,13 +34,13 @@ const initialState: State = {
 function reducer(state: State, action: Action): State {
   switch (action.type) {
     case "START_LISTENING":
-      if (state.status === "idle" || state.status === "speaking") {
+      if (state.status === "idle" || state.status === "speaking" || state.status === "muted") {
         return { ...state, status: "listening" };
       }
       return state;
     case "STOP_LISTENING":
       if (state.status === "listening") {
-        return { ...state, status: "idle" };
+        return { ...state, status: "idle" }; // Go to idle to await processing
       }
       return state;
     case "START_THINKING":
@@ -56,7 +56,9 @@ function reducer(state: State, action: Action): State {
       };
     case "START_SPEAKING":
        if (state.status === 'thinking' || state.status === 'muted') {
-         return {...state, status: state.status === 'muted' ? 'muted' : 'speaking'};
+         // If muted, we don't change state to 'speaking'. The response is added but not spoken.
+         if (state.status === 'muted') return state;
+         return {...state, status: 'speaking'};
        }
        return state;
     case "FINISH_SPEAKING":
@@ -67,7 +69,7 @@ function reducer(state: State, action: Action): State {
     case "MUTE":
       return { ...state, status: "muted" };
     case "UNMUTE":
-      return { ...state, status: "idle" };
+      return { ...state, status: "idle" }; // Go to idle to start listening again
     case "ERROR":
       return { ...state, status: "idle" };
     default:
@@ -150,21 +152,24 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
       dispatch({ type: "BOT_RESPONSE", botMessage });
       
       if (state.status === 'muted') {
-         dispatch({ type: "START_SPEAKING" }); // Will keep state as muted
+         dispatch({ type: "FINISH_SPEAKING" }); // Just finish, don't speak
          return;
       }
       
       const ttsResult = await textToSpeech({ text: questionResult.answer });
-      dispatch({ type: "START_SPEAKING" });
 
-      if (audioRef.current && ttsResult.audioDataUri) {
-        audioRef.current.src = ttsResult.audioDataUri;
-        audioRef.current.play().catch(e => {
-             console.error("Audio playback failed:", e);
-             dispatch({ type: "ERROR" });
-        });
+      if (ttsResult.audioDataUri) {
+        dispatch({ type: "START_SPEAKING" });
+        if (audioRef.current) {
+          audioRef.current.src = ttsResult.audioDataUri;
+          audioRef.current.play().catch(e => {
+               console.error("Audio playback failed:", e);
+               dispatch({ type: "ERROR" });
+          });
+        }
       } else {
-        dispatch({ type: "ERROR" });
+        // TTS failed (e.g. rate limit), but we can still proceed
+        dispatch({ type: "FINISH_SPEAKING" });
       }
     } catch (error) {
       console.error("AI interaction failed:", error);
@@ -323,8 +328,8 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
             onClick={handleStopListening}
             disabled={state.status !== 'listening'}
             className={cn(
-                "w-20 h-20 rounded-full flex items-center justify-center bg-white text-black hover:bg-white/90 transition-all scale-100 disabled:scale-0",
-                state.status === 'listening' ? 'opacity-100' : 'opacity-0'
+                "w-20 h-20 rounded-full flex items-center justify-center bg-white text-black hover:bg-white/90 transition-all duration-300",
+                state.status === 'listening' ? 'scale-100 opacity-100' : 'scale-0 opacity-0'
             )}
           >
             <Square size={32} />

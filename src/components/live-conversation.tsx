@@ -39,32 +39,33 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
     }
+    isProcessingRef.current = false;
   }, []);
-
+  
   const startListening = useCallback(() => {
-    if (isMuted || !recognitionRef.current || isProcessingRef.current) {
-      setStatus("idle");
-      return;
+    if (isMuted || !recognitionRef.current) {
+        setStatus("idle");
+        return;
     }
     try {
         transcriptRef.current = "";
         recognitionRef.current.start();
         setStatus("listening");
     } catch (e) {
-      // Errors like "already started" can be ignored.
+        // Errors like "already started" can be ignored.
+        // It might be called multiple times in quick succession.
     }
   }, [isMuted]);
-  
+
   const processAndRespond = useCallback(async (transcript: string) => {
     if (isProcessingRef.current || !transcript.trim()) {
-        if (!transcript.trim()) {
-            startListening();
-        }
+        startListening();
         return;
     }
     
     isProcessingRef.current = true;
     setStatus("thinking");
+
     const userMessage: Message = { role: "user", content: transcript };
     const currentHistory = [...chatHistory, userMessage];
     setChatHistory(currentHistory);
@@ -73,8 +74,9 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
       const questionResult = await askQuestion({
         reportSummary,
         question: transcript,
-        chatHistory: currentHistory.map(m => ({ role: m.role, content: m.content })),
+        chatHistory: currentHistory.slice(0, -1).map(m => ({ role: m.role, content: m.content })),
       });
+
       const botMessage: Message = { role: "bot", content: questionResult.answer };
       setChatHistory(prev => [...prev, botMessage]);
 
@@ -83,7 +85,7 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
           startListening();
           return;
       }
-
+      
       const ttsResult = await textToSpeech({ text: questionResult.answer });
       if (audioRef.current) {
         setStatus("speaking");
@@ -119,6 +121,14 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
     recognitionRef.current.interimResults = true;
 
     recognitionRef.current.onresult = (event) => {
+        // If the bot is speaking and the user starts talking, interrupt the bot.
+        if (status === 'speaking') {
+            stopSpeaking();
+        }
+        if (status !== 'listening') {
+            setStatus('listening');
+        }
+
         if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
 
         let interimTranscript = '';
@@ -140,7 +150,9 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
     };
     
     recognitionRef.current.onerror = (event) => {
-        console.error("Speech recognition error", event.error);
+        if (event.error !== 'no-speech' && event.error !== 'aborted') {
+            console.error("Speech recognition error", event.error);
+        }
     };
 
     recognitionRef.current.onend = () => {
@@ -148,8 +160,8 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
         
         if (transcriptRef.current.trim() && !isProcessingRef.current) {
             processAndRespond(transcriptRef.current);
-        } else if (status === "listening" && !isMuted && !isProcessingRef.current) {
-            startListening();
+        } else if (!isProcessingRef.current && !isMuted) {
+            startListening(); // If nothing was said, just start listening again.
         }
     };
 
@@ -158,6 +170,11 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
       isProcessingRef.current = false;
       startListening();
     };
+
+    // When audio starts playing, we still want to be able to detect user speech.
+    audioRef.current.onplay = () => {
+        startListening();
+    }
 
     startListening();
 
@@ -181,7 +198,6 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
             recognitionRef.current?.stop();
             if(status === 'speaking'){
                 stopSpeaking();
-                isProcessingRef.current = false;
             }
             setStatus("idle");
         } else { // Un-muting

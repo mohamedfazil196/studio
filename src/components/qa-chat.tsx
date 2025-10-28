@@ -1,20 +1,18 @@
+
 "use client";
 
 import { useState, useRef, useEffect } from 'react';
-import Image from 'next/image';
-import { Bot, User, Send, Loader2, Mic, MessagesSquare } from 'lucide-react';
+import { Bot, User, Send, Loader2, Volume2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { askQuestion, type InteractiveQAndAInput } from '@/ai/flows/enable-interactive-q-and-a';
+import { askQuestion } from '@/ai/flows/enable-interactive-q-and-a';
 import { textToSpeech } from '@/ai/flows/text-to-speech';
 import { useToast } from '@/hooks/use-toast';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
-import { doctorAvatar } from '@/lib/placeholder-images';
 
 type Message = {
   role: 'user' | 'bot';
@@ -79,41 +77,11 @@ export function QAChat({ reportSummary }: QAChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isAvatarMode, setIsAvatarMode] = useState(false);
+  const [isVoiceOutputEnabled, setIsVoiceOutputEnabled] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const { toast } = useToast();
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-
-  const [isListening, setIsListening] = useState(false);
-  const [speechSupported, setSpeechSupported] = useState(false);
-  const recognitionRef = useRef<SpeechRecognition | null>(null);
-
-  useEffect(() => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (SpeechRecognition) {
-      setSpeechSupported(true);
-      const recognition = new SpeechRecognition();
-      recognition.continuous = false;
-      recognition.interimResults = false;
-      recognition.lang = 'en-US';
-
-      recognition.onresult = (event) => {
-        const transcript = event.results[0][0].transcript;
-        setInput(transcript);
-        handleSendMessage(new Event('submit'), transcript);
-      };
-      recognition.onerror = (event) => {
-        console.error("Speech recognition error", event.error);
-        toast({ title: "Voice Error", description: "Could not recognize speech. Please try again.", variant: "destructive" });
-        setIsListening(false);
-      };
-      recognition.onend = () => {
-        setIsListening(false);
-      };
-      recognitionRef.current = recognition;
-    }
-  }, [toast]);
 
   useEffect(() => {
     if (scrollAreaRef.current) {
@@ -130,15 +98,12 @@ export function QAChat({ reportSummary }: QAChatProps) {
         audioRef.current.pause();
         audioRef.current = null;
       }
-      if (recognitionRef.current) {
-        recognitionRef.current.stop();
-      }
     };
   }, []);
 
-  const handleSendMessage = async (e: React.FormEvent | Event, messageContent?: string) => {
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    const currentInput = (messageContent || input).trim();
+    const currentInput = input.trim();
     if (!currentInput || isLoading) return;
 
     const userMessage: Message = { role: 'user', content: currentInput };
@@ -164,13 +129,14 @@ export function QAChat({ reportSummary }: QAChatProps) {
       const botMessage: Message = { role: 'bot', content: result.answer };
       setMessages((prev) => [...prev, botMessage]);
 
-      if (isAvatarMode) {
+      if (isVoiceOutputEnabled) {
         setIsSpeaking(true);
         try {
           const speechResult = await textToSpeech({ text: result.answer });
           if (!audioRef.current) {
             audioRef.current = new Audio();
             audioRef.current.onended = () => setIsSpeaking(false);
+            audioRef.current.onpause = () => setIsSpeaking(false);
           }
           audioRef.current.src = speechResult.audioDataUri;
           audioRef.current.play();
@@ -187,61 +153,39 @@ export function QAChat({ reportSummary }: QAChatProps) {
         description: "Failed to get an answer. Please try again.",
         variant: "destructive",
       });
-      setMessages(messages);
+      setMessages(messages); // Revert to previous messages on error
     } finally {
       setIsLoading(false);
     }
   };
-
-  const handleToggleAvatarMode = (checked: boolean) => {
-    setIsAvatarMode(checked);
+  
+  const handleToggleVoiceOutput = (checked: boolean) => {
+    setIsVoiceOutputEnabled(checked);
     if (!checked && audioRef.current) {
       audioRef.current.pause();
       setIsSpeaking(false);
     }
   };
 
-  const handleMicClick = () => {
-    if (isListening) {
-      recognitionRef.current?.stop();
-      setIsListening(false);
-    } else {
-      recognitionRef.current?.start();
-      setIsListening(true);
-    }
-  };
 
   return (
     <Card className="h-full flex flex-col max-h-[80vh]">
       <CardHeader>
         <div className="flex justify-between items-start">
           <div>
-            <CardTitle className="font-headline text-xl text-primary flex items-center gap-2"><MessagesSquare />Interactive Q&A</CardTitle>
+            <CardTitle className="font-headline text-xl text-primary flex items-center gap-2"><Bot />Interactive Q&A</CardTitle>
             <CardDescription>Ask questions about the report summary or general medical topics.</CardDescription>
           </div>
           <div className="flex items-center space-x-2">
-            <Switch id="avatar-mode" checked={isAvatarMode} onCheckedChange={handleToggleAvatarMode} />
-            <Label htmlFor="avatar-mode">Talking Avatar</Label>
+            <Switch id="voice-output-mode" checked={isVoiceOutputEnabled} onCheckedChange={handleToggleVoiceOutput} />
+            <Label htmlFor="voice-output-mode">Voice Answers</Label>
           </div>
         </div>
       </CardHeader>
       <CardContent className="flex-grow flex flex-col gap-4 overflow-hidden">
-        {isAvatarMode && (
-          <div className="relative h-48 w-48 mx-auto mb-4 rounded-full flex items-center justify-center bg-gradient-to-br from-primary/20 to-background">
-            <Image
-              src={doctorAvatar.imageUrl}
-              alt="Doctor Avatar"
-              width={180}
-              height={180}
-              className={`object-contain transition-transform duration-300 ${isSpeaking ? 'scale-105' : 'scale-100'}`}
-              priority
-            />
-            <div className={`absolute inset-0 rounded-full border-4 border-primary transition-all duration-300 ${isSpeaking ? 'animate-pulse' : 'border-transparent'}`}></div>
-          </div>
-        )}
         <ScrollArea className="flex-grow h-[400px] pr-4" ref={scrollAreaRef}>
           <div className="space-y-4">
-            {messages.length === 0 && !isAvatarMode ? (
+            {messages.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground p-4">
                 <Bot className="w-12 h-12 mb-4" />
                 <p className="font-semibold">No questions asked yet.</p>
@@ -295,21 +239,10 @@ export function QAChat({ reportSummary }: QAChatProps) {
           <Input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Type or click the mic to talk..."
-            disabled={isLoading || isListening}
+            placeholder="Type your question..."
+            disabled={isLoading}
             autoComplete="off"
           />
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button type="button" size="icon" variant="outline" onClick={handleMicClick} disabled={!speechSupported || isLoading}>
-                  {isListening ? <Mic className="h-4 w-4 text-red-500 animate-pulse" /> : <Mic className="h-4 w-4" />}
-                  <span className="sr-only">Use microphone</span>
-                </Button>
-              </TooltipTrigger>
-              {!speechSupported && <TooltipContent>Voice input is not supported in your browser.</TooltipContent>}
-            </Tooltip>
-          </TooltipProvider>
           <Button type="submit" size="icon" disabled={isLoading || !input.trim()}>
             {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
             <span className="sr-only">Send</span>
@@ -319,3 +252,5 @@ export function QAChat({ reportSummary }: QAChatProps) {
     </Card>
   );
 }
+
+    

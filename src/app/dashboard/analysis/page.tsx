@@ -62,6 +62,7 @@ export default function AnalysisPage() {
                     if (user && firestore) {
                         const reportsColRef = collection(firestore, 'users', user.uid, 'medical_reports');
                         addDocumentNonBlocking(reportsColRef, {
+                            id: '', // Firestore will generate an ID
                             doctorSummary: finalAnalysis.doctorSummary,
                             patientSummary: finalAnalysis.patientSummary,
                             lifestyleSuggestions: finalAnalysis.lifestyleSuggestions,
@@ -135,3 +136,5 @@ export default function AnalysisPage() {
         <FileUploader onFileUpload={handleFileUpload} />
     )
 }
+
+    

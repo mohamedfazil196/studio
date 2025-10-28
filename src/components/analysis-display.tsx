@@ -1,3 +1,4 @@
+
 import { FileText, Stethoscope, HeartPulse, MessagesSquare, File as FileIcon, AlertTriangle, ShieldCheck, ShieldAlert, Pill, Languages, Play, Pause, BellRing, Loader2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -221,7 +222,7 @@ export function AnalysisDisplay({ fileName, analysis }: AnalysisDisplayProps) {
         <AnalysisCard icon={<Stethoscope />} title="Doctor-Style Summary">
             <p className="font-code">{analysis.doctorSummary}</p>
         </AnalysisCard>
-        <AnalysisCard icon={<HeartPulse />} title="Lifestyle & Health Suggestions">
+        <AnalysisCard icon={<HeartPulse />} title="Lifestyle &amp; Health Suggestions">
             <p>{analysis.lifestyleSuggestions}</p>
         </AnalysisCard>
          <AnalysisCard icon={<Pill />} title="Recommended Medicines">
@@ -262,3 +263,5 @@ export function AnalysisDisplay({ fileName, analysis }: AnalysisDisplayProps) {
     </div>
   );
 }
+
+    

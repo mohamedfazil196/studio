@@ -153,12 +153,13 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
     recognitionRef.current.interimResults = true;
 
     recognitionRef.current.onresult = (event) => {
-        // If the bot is speaking, and we detect new speech, interrupt it.
         if (state.status === 'speaking') {
             stopSpeaking();
+            // Transition directly to listening, which will be handled by the onend of the speaking audio
+            // but we can also force it here for faster response.
+            dispatch({ type: 'START_LISTENING' });
         }
 
-        // Always restart silence timer on new result
         if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
 
         let interimTranscript = '';
@@ -174,16 +175,17 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
         
         transcriptRef.current = finalTranscript || interimTranscript;
 
-        // Set a timer to stop recognition if there's a pause.
         silenceTimerRef.current = setTimeout(() => {
             stopListening();
         }, 1000); // 1 second of silence
     };
     
     recognitionRef.current.onend = () => {
-        dispatch({ type: "STOP_LISTENING" });
-        if (transcriptRef.current) {
-            dispatch({ type: 'PROCESS_SPEECH', transcript: transcriptRef.current });
+        if (state.status === 'listening') { // Only process if we were listening
+            dispatch({ type: "STOP_LISTENING" });
+            if (transcriptRef.current) {
+                dispatch({ type: 'PROCESS_SPEECH', transcript: transcriptRef.current });
+            }
         }
     };
     
@@ -195,6 +197,9 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
     
     audioRef.current = new Audio();
     audioRef.current.onended = () => dispatch({ type: "FINISH_SPEAKING" });
+
+    // Initial start
+    startListening();
 
     return () => {
       stopListening();
@@ -245,7 +250,7 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
 
     const speak = async () => {
         const lastBotMessage = state.chatHistory[state.chatHistory.length-1];
-        if (lastBotMessage.role !== 'bot') {
+        if (lastBotMessage.role !== 'bot' || !lastBotMessage.content) {
             dispatch({ type: 'FINISH_SPEAKING' });
             return;
         }
@@ -263,7 +268,7 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
         }
     }
     speak();
-
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.status, state.chatHistory]);
 
 
@@ -356,3 +361,5 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
     </div>
   );
 }
+
+    

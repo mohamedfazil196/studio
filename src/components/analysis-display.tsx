@@ -82,7 +82,6 @@ export function AnalysisDisplay({ fileName, analysis }: AnalysisDisplayProps) {
     utterance.onstart = () => setIsPlaying(true);
     utterance.onend = () => setIsPlaying(false);
     utterance.onerror = (e) => {
-      console.error("Speech synthesis error", e);
       setIsPlaying(false);
       toast({
         title: "Voice Error",

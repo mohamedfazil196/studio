@@ -43,14 +43,13 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
     
     window.speechSynthesis.cancel();
     
-    // Remove markdown for cleaner speech
     const cleanText = text.replace(/\*\*/g, '');
     const utterance = new SpeechSynthesisUtterance(cleanText);
     
     utterance.onstart = () => setStatus("speaking");
     utterance.onend = () => setStatus("idle");
     utterance.onerror = (e) => {
-        console.error("Speech synthesis error", e);
+        console.error("Speech synthesis error", e.error);
         setStatus("idle");
         toast({
             title: "Voice Error",
@@ -69,7 +68,7 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
   
       setStatus("thinking");
       const userMessage: Message = { role: 'user', content: transcript };
-      // Use a functional update to get the latest chat history
+      
       const updatedHistory = [...chatHistory, userMessage];
       setChatHistory(updatedHistory);
   
@@ -91,7 +90,7 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
       } catch (error) {
         console.error("Error processing AI response:", error);
         setStatus("error");
-        setChatHistory(prev => prev.filter(m => m.role !== 'user' || m.content !== transcript)); // remove optimistic user message
+        setChatHistory(prev => prev.filter(m => m.role !== 'user' || m.content !== transcript));
         toast({
           title: "AI Error",
           description: "Could not get a response. Please try again.",
@@ -100,7 +99,6 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
       }
     }, [chatHistory, reportSummary, speakText, toast]);
   
-  // This is a new centralized function to stop listening and trigger processing
   const stopAndProcess = useCallback(() => {
     if (recognitionRef.current && status === 'listening') {
         recognitionRef.current.stop();
@@ -143,14 +141,12 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
         };
         
         recognition.onend = () => {
-            // Only process if we were actively listening. This prevents processing on mute/close.
             if (status === 'listening') {
                 processAndRespond(finalTranscriptRef.current);
             }
         };
 
         recognition.onresult = (event) => {
-          let interimTranscript = '';
           finalTranscriptRef.current = '';
           for (let i = 0; i < event.results.length; ++i) {
              finalTranscriptRef.current += event.results[i][0].transcript;
@@ -161,7 +157,7 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
     try {
       recognitionRef.current.start();
     } catch(e) {
-       // This can happen if recognition is already active, which is fine.
+       console.error("Could not start recognition", e);
     }
   }, [status, processAndRespond, onClose, toast]);
   
@@ -174,13 +170,11 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
 
   const handleMuteToggle = () => {
     if (status === "muted") {
-      setStatus("idle"); // This will trigger the useEffect to start listening
+      setStatus("idle");
     } else {
-      // If listening, stop and process the captured audio
       if (status === 'listening') {
           stopAndProcess();
       }
-      // If speaking, just cancel speech
       if(status === 'speaking'){
           window.speechSynthesis.cancel();
       }
@@ -198,7 +192,7 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
   
   const handleClose = () => {
     if (recognitionRef.current) {
-        recognitionRef.current.onend = null; // prevent onend from firing after close
+        recognitionRef.current.onend = null;
         recognitionRef.current.stop();
     }
     window.speechSynthesis.cancel();

@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { Bot, User, Send, Loader2, Headset, Square } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -93,20 +93,27 @@ export function QAChat({ reportSummary }: QAChatProps) {
       }
     }
   }, [messages, isLoading]);
+  
+  const handleStopSpeaking = useCallback(() => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0; // Reset audio to the beginning
+      setIsSpeaking(false);
+    }
+  }, []);
 
   useEffect(() => {
     return () => {
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
-      }
+      handleStopSpeaking();
     };
-  }, []);
+  }, [handleStopSpeaking]);
 
   const handleSendMessage = async (e: React.FormEvent, messageContent?: string) => {
     e.preventDefault();
     const currentInput = messageContent || input.trim();
     if (!currentInput || isLoading) return;
+
+    handleStopSpeaking();
 
     const userMessage: Message = { role: 'user', content: currentInput };
     const newMessages = [...messages, userMessage];
@@ -135,6 +142,14 @@ export function QAChat({ reportSummary }: QAChatProps) {
         setIsSpeaking(true);
         try {
           const speechResult = await textToSpeech({ text: result.answer });
+          
+          if (!speechResult.audioDataUri) {
+            setIsSpeaking(false);
+            // Optionally notify the user that TTS failed (e.g. rate limit)
+            toast({ title: "Audio Error", description: "Could not generate audio. You may have exceeded the daily limit.", variant: "destructive" });
+            return;
+          }
+
           if (!audioRef.current) {
             audioRef.current = new Audio();
             audioRef.current.onended = () => setIsSpeaking(false);
@@ -164,20 +179,10 @@ export function QAChat({ reportSummary }: QAChatProps) {
 
   const handleToggleVoiceOutput = (checked: boolean) => {
     setIsVoiceOutputEnabled(checked);
-    if (!checked && audioRef.current) {
-      audioRef.current.pause();
-      setIsSpeaking(false);
+    if (!checked) {
+      handleStopSpeaking();
     }
   };
-
-  const handleStopSpeaking = () => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0; // Reset audio to the beginning
-      setIsSpeaking(false);
-    }
-  };
-
 
   return (
     <>

@@ -43,6 +43,7 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
     
     window.speechSynthesis.cancel();
     
+    // Remove markdown for cleaner speech
     const cleanText = text.replace(/\*\*/g, '');
     const utterance = new SpeechSynthesisUtterance(cleanText);
     
@@ -93,7 +94,6 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
           description: "Could not get a response. Please try again.",
           variant: "destructive"
         });
-        // Do not remove the user message, so they can see what they asked
       }
     }, [chatHistory, reportSummary, speakText, toast]);
 
@@ -143,16 +143,11 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
         };
         
         recognition.onend = () => {
-            setStatus(currentStatus => {
-                if (currentStatus === 'listening') {
-                    if (finalTranscriptRef.current) {
-                        processAndRespond(finalTranscriptRef.current);
-                        return 'thinking';
-                    }
-                    return 'idle';
-                }
-                return currentStatus;
-            });
+            // This is the key change: only process if the status is still 'listening'
+            // which means it wasn't manually stopped with a result.
+            if (status === 'listening') {
+                processAndRespond(finalTranscriptRef.current);
+            }
         };
 
         recognition.onresult = (event) => {

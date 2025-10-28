@@ -37,6 +37,8 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
   
   const finalTranscriptRef = useRef<string>('');
   const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const isProcessingRef = useRef<boolean>(false);
+
 
   const speakText = useCallback((text: string) => {
     if (typeof window === 'undefined' || !window.speechSynthesis) {
@@ -64,21 +66,24 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
   }, [toast]);
 
   const processAndRespond = useCallback(async (transcript: string) => {
-      if (!transcript.trim()) {
+      if (!transcript.trim() || isProcessingRef.current) {
         setStatus("idle");
         return;
       }
-  
+      
+      isProcessingRef.current = true;
       setStatus("thinking");
       const userMessage: Message = { role: 'user', content: transcript };
-      const updatedHistory = [...chatHistory, userMessage];
-      setChatHistory(updatedHistory);
+      
+      // Use a functional update to get the latest chat history
+      setChatHistory(prev => [...prev, userMessage]);
   
       try {
         const result = await askQuestion({
           reportSummary,
           question: transcript,
-          chatHistory: updatedHistory.map(m => ({ role: m.role, content: m.content })),
+          // Pass the most up-to-date history to the AI
+          chatHistory: [...chatHistory, userMessage].map(m => ({ role: m.role, content: m.content })),
         });
 
         if (!result || !result.answer) {
@@ -95,6 +100,8 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
         const botMessage: Message = { role: "bot", content: "I'm sorry, I ran into an error. Please try again." };
         setChatHistory(prev => [...prev, botMessage]);
         speakText(botMessage.content);
+      } finally {
+        isProcessingRef.current = false;
       }
     }, [chatHistory, reportSummary, speakText, toast]);
   
@@ -102,9 +109,10 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
   const stopAndProcess = useCallback(() => {
     if (recognitionRef.current && status === 'listening') {
         recognitionRef.current.stop();
-        // The onend event will handle calling processAndRespond
+        // Directly process the transcript instead of relying on onend
+        processAndRespond(finalTranscriptRef.current);
     }
-  }, [status]);
+  }, [status, processAndRespond]);
 
 
   const startListening = useCallback(() => {
@@ -148,32 +156,30 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
       recognition.onstart = () => setStatus("listening");
       
       recognition.onerror = (event) => {
-        if (event.error === 'no-speech') {
-            // Ignore no-speech errors, let the `onend` handle it.
-            return;
-        }
-        if (event.error !== 'aborted') {
+        if (event.error !== 'aborted' && event.error !== 'no-speech') {
           console.error("Speech recognition error:", event.error);
           setStatus("error");
         }
       };
       
       recognition.onend = () => {
-          if (status === 'listening') {
-              processAndRespond(finalTranscriptRef.current);
+          // Only reset to idle if not already processing or in another state
+          if (status === 'listening' && !isProcessingRef.current) {
+             setStatus('idle');
           }
       };
 
       recognition.onresult = (event) => {
         let interimTranscript = '';
-        finalTranscriptRef.current = '';
+        let finalTranscript = '';
         for (let i = 0; i < event.results.length; ++i) {
             if (event.results[i].isFinal) {
-                finalTranscriptRef.current += event.results[i][0].transcript;
+                finalTranscript += event.results[i][0].transcript;
             } else {
                 interimTranscript += event.results[i][0].transcript;
             }
         }
+        finalTranscriptRef.current = finalTranscript;
       };
       
       const timer = setTimeout(() => startListening(), 250);
@@ -197,11 +203,10 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
       setStatus("idle");
       startListening();
     } else {
-      if (status === 'listening') {
-        stopAndProcess();
-      } else if (status === 'speaking'){
+      if (status === 'speaking'){
         window.speechSynthesis.cancel();
       }
+      stopAndProcess(); // This will stop listening and trigger the response
       setStatus("muted");
     }
   };
@@ -255,6 +260,16 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
                     )}
                   </div>
                 ))}
+                 {status === 'thinking' && (
+                    <div className="flex items-start gap-3">
+                    <Avatar className="h-8 w-8">
+                        <AvatarFallback className='bg-primary text-primary-foreground'><Bot className="h-5 w-5"/></AvatarFallback>
+                    </Avatar>
+                    <div className="bg-white/10 rounded-lg px-4 py-3 flex items-center">
+                        <Loader2 className="h-5 w-5 animate-spin text-white"/>
+                    </div>
+                    </div>
+                )}
               </div>
           </ScrollArea>
         </div>
@@ -315,5 +330,3 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
     </div>
   );
 }
-
-    

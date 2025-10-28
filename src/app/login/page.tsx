@@ -52,12 +52,12 @@ export default function LoginPage() {
     setIsLoggingIn(true);
     try {
       await initiateEmailSignIn(auth as Auth, values.email, values.password);
-      // Don't show toast here, let the dashboard load
       router.push('/dashboard');
     } catch (error: any) {
+      console.error("Login failed:", error);
       toast({
         title: 'Login Failed',
-        description: error.message || 'An unexpected error occurred.',
+        description: "Please check your email and password. If the problem persists, it may be a network issue.",
         variant: 'destructive',
       });
       setIsLoggingIn(false);
@@ -69,12 +69,12 @@ export default function LoginPage() {
     setIsLoggingIn(true);
     try {
       await initiateEmailSignUp(auth as Auth, values.email, values.password, values.username);
-      // Don't show toast here, let the dashboard load
       router.push('/dashboard');
     } catch (error: any) {
+       console.error("Registration failed:", error);
       toast({
         title: 'Registration Failed',
-        description: error.message || 'An unexpected error occurred.',
+        description: error.message || 'An unexpected error occurred during registration.',
         variant: 'destructive',
       });
       setIsLoggingIn(false);

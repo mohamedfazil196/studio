@@ -1,12 +1,12 @@
 
-import { FileText, Stethoscope, HeartPulse, MessagesSquare, File as FileIcon, AlertTriangle, ShieldCheck, ShieldAlert, Pill, Languages, Play, Pause, BellRing, Loader2 } from "lucide-react";
+import { FileText, Stethoscope, HeartPulse, MessagesSquare, File as FileIcon, AlertTriangle, ShieldCheck, ShieldAlert, Pill, Languages, Play, Pause, BellRing, Loader2, Square } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { type Analysis } from "@/app/types/analysis";
 import { Button } from "./ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { translateAndSpeak } from "@/ai/flows/translate-and-speak";
 import { useToast } from "@/hooks/use-toast";
 import { ScrollArea } from "./ui/scroll-area";
@@ -58,17 +58,45 @@ export function AnalysisDisplay({ fileName, analysis }: AnalysisDisplayProps) {
   const [translatedSummary, setTranslatedSummary] = useState(analysis.patientSummary);
   const [isTranslating, setIsTranslating] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
   const { toast } = useToast();
+  
+  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+
+  const handleStopSpeaking = useCallback(() => {
+    if (typeof window !== 'undefined' && window.speechSynthesis.speaking) {
+      window.speechSynthesis.cancel();
+      setIsPlaying(false);
+    }
+  }, []);
+
+  const speakText = (text: string, lang: string) => {
+    if (typeof window === 'undefined' || !window.speechSynthesis) return;
+    
+    handleStopSpeaking();
+    
+    const utterance = new SpeechSynthesisUtterance(text);
+    utteranceRef.current = utterance;
+    utterance.lang = lang;
+    
+    utterance.onstart = () => setIsPlaying(true);
+    utterance.onend = () => setIsPlaying(false);
+    utterance.onerror = (e) => {
+      console.error("Speech synthesis error", e);
+      setIsPlaying(false);
+      toast({
+        title: "Voice Error",
+        description: "Could not play audio. Your browser might not support this language.",
+        variant: "destructive"
+      });
+    };
+
+    window.speechSynthesis.speak(utterance);
+  };
+
 
   const handleLanguageChange = async (langCode: string) => {
       setSelectedLanguage(langCode);
-      // Reset audio when language changes
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current.src = "";
-      }
-      setIsPlaying(false);
+      handleStopSpeaking();
 
       if (langCode === 'en') {
           setTranslatedSummary(analysis.patientSummary);
@@ -77,16 +105,20 @@ export function AnalysisDisplay({ fileName, analysis }: AnalysisDisplayProps) {
 
       setIsTranslating(true);
       try {
-        const result = await translateAndSpeak({ text: analysis.patientSummary, targetLanguage: langCode });
-        setTranslatedSummary(result.translatedText);
-        
-        // Setup new audio
-        if (!audioRef.current) {
-            audioRef.current = new Audio();
-            audioRef.current.onended = () => setIsPlaying(false);
-        }
-        audioRef.current.src = result.audioDataUri;
+        // Use Genkit flow for translation only, not for speech.
+        const { text: translatedText } = await (await fetch('/api/ai/generate', {
+            method: 'POST',
+            body: JSON.stringify({
+                prompt: `Translate the following text to the language specified by the code '${langCode}': ${analysis.patientSummary}`,
+                model: 'googleai/gemini-2.5-flash',
+            })
+        })).json();
 
+        if (!translatedText) {
+            throw new Error('Translation failed.');
+        }
+
+        setTranslatedSummary(translatedText);
       } catch (error) {
           console.error('Translation error:', error);
           toast({
@@ -94,59 +126,26 @@ export function AnalysisDisplay({ fileName, analysis }: AnalysisDisplayProps) {
               description: "Could not translate the summary.",
               variant: "destructive"
           });
-          setTranslatedSummary(analysis.patientSummary);
+          setTranslatedSummary(analysis.patientSummary); // Revert on failure
       } finally {
           setIsTranslating(false);
       }
   }
 
-  const handlePlayPause = async () => {
-    if (selectedLanguage === 'en') {
-        toast({
-            title: "Feature not available for English",
-            description: "Please select another language to use text-to-speech.",
-            variant: "default"
-        });
-        return;
-    }
-
-    if (!audioRef.current || !audioRef.current.src) {
-        setIsTranslating(true);
-        await handleLanguageChange(selectedLanguage); // This will set up the audio
-        setIsTranslating(false);
-        // After handleLanguageChange, audioRef.current should be ready to play
-        // We add a small delay to ensure the src is loaded
-        setTimeout(() => {
-            if (audioRef.current) {
-                audioRef.current.play().then(() => setIsPlaying(true)).catch(e => console.error("Playback failed after re-init", e));
-            }
-        }, 100);
-        return;
-    }
-
+  const handlePlayPause = () => {
     if (isPlaying) {
-        audioRef.current.pause();
-        setIsPlaying(false);
+      handleStopSpeaking();
     } else {
-        audioRef.current.play().then(() => {
-            setIsPlaying(true);
-        }).catch(e => {
-            toast({ title: "Playback Error", description: "Could not play audio.", variant: "destructive" });
-            console.error(e);
-        });
+      speakText(translatedSummary, selectedLanguage);
     }
   };
 
-  // Cleanup audio element on component unmount
   useEffect(() => {
-    const audioElement = audioRef.current;
+    // Cleanup speechSynthesis on component unmount
     return () => {
-        if (audioElement) {
-            audioElement.pause();
-            audioElement.src = '';
-        }
+      handleStopSpeaking();
     };
-  }, []);
+  }, [handleStopSpeaking]);
 
 
   const AnalysisCard = ({ icon, title, children, className }: { icon: React.ReactNode, title: string, children: React.ReactNode, className?: string }) => (
@@ -200,7 +199,7 @@ export function AnalysisDisplay({ fileName, analysis }: AnalysisDisplayProps) {
                                 ))}
                             </SelectContent>
                         </Select>
-                        <Button size="icon" variant="outline" onClick={handlePlayPause} disabled={isTranslating || selectedLanguage === 'en'}>
+                        <Button size="icon" variant="outline" onClick={handlePlayPause} disabled={isTranslating}>
                             {isTranslating ? <Loader2 className="animate-spin" /> : isPlaying ? <Pause /> : <Play />}
                             <span className="sr-only">Play or pause summary</span>
                         </Button>
@@ -209,7 +208,7 @@ export function AnalysisDisplay({ fileName, analysis }: AnalysisDisplayProps) {
             </CardHeader>
             <CardContent>
                 <ScrollArea className="h-[40vh] pr-4">
-                    {isTranslating && selectedLanguage !== 'en' ? (
+                    {isTranslating ? (
                         <div className="flex items-center justify-center h-full">
                             <Loader2 className="w-8 h-8 animate-spin text-primary" />
                         </div>
@@ -263,5 +262,3 @@ export function AnalysisDisplay({ fileName, analysis }: AnalysisDisplayProps) {
     </div>
   );
 }
-
-    

@@ -8,7 +8,6 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { askQuestion } from '@/ai/flows/enable-interactive-q-and-a';
-import { textToSpeech } from '@/ai/flows/text-to-speech';
 import { useToast } from '@/hooks/use-toast';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Switch } from '@/components/ui/switch';
@@ -83,7 +82,15 @@ export function QAChat({ reportSummary }: QAChatProps) {
   const [isLiveConversationOpen, setIsLiveConversationOpen] = useState(false);
   const { toast } = useToast();
   const scrollAreaRef = useRef<HTMLDivElement>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  
+  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+
+  const handleStopSpeaking = useCallback(() => {
+    if (window.speechSynthesis.speaking) {
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (scrollAreaRef.current) {
@@ -93,20 +100,37 @@ export function QAChat({ reportSummary }: QAChatProps) {
       }
     }
   }, [messages, isLoading]);
-  
-  const handleStopSpeaking = useCallback(() => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0; // Reset audio to the beginning
-      setIsSpeaking(false);
-    }
-  }, []);
 
   useEffect(() => {
+    // Cleanup speechSynthesis on component unmount
     return () => {
       handleStopSpeaking();
     };
   }, [handleStopSpeaking]);
+
+  const speakText = (text: string) => {
+    if (!isVoiceOutputEnabled || typeof window === 'undefined' || !window.speechSynthesis) {
+        return;
+    }
+    
+    handleStopSpeaking();
+    
+    const utterance = new SpeechSynthesisUtterance(text);
+    utteranceRef.current = utterance;
+    
+    utterance.onstart = () => setIsSpeaking(true);
+    utterance.onend = () => setIsSpeaking(false);
+    utterance.onerror = () => {
+        setIsSpeaking(false);
+        toast({
+            title: "Voice Error",
+            description: "Could not play the audio.",
+            variant: "destructive"
+        });
+    };
+    
+    window.speechSynthesis.speak(utterance);
+  }
 
   const handleSendMessage = async (e: React.FormEvent, messageContent?: string) => {
     e.preventDefault();
@@ -139,35 +163,7 @@ export function QAChat({ reportSummary }: QAChatProps) {
       setMessages((prev) => [...prev, botMessage]);
 
       if (isVoiceOutputEnabled) {
-        setIsSpeaking(true);
-        try {
-          const speechResult = await textToSpeech({ text: result.answer });
-          
-          if (!speechResult.audioDataUri) {
-             setIsSpeaking(false);
-             toast({ 
-                title: "Audio Error", 
-                description: "Could not generate audio. You may have exceeded the daily limit.", 
-                variant: "destructive" 
-             });
-             return; // Stop execution for this path
-          }
-
-          if (!audioRef.current) {
-            audioRef.current = new Audio();
-            audioRef.current.onended = () => setIsSpeaking(false);
-            audioRef.current.onpause = () => setIsSpeaking(false);
-          }
-          audioRef.current.src = speechResult.audioDataUri;
-          audioRef.current.play().catch(() => {
-             setIsSpeaking(false);
-             toast({ title: "Playback Error", description: "Could not play the audio.", variant: "destructive" });
-          });
-        } catch (speechError) {
-          console.error("TTS Error:", speechError);
-          toast({ title: "Audio Error", description: "Could not generate audio for the response.", variant: "destructive" });
-          setIsSpeaking(false);
-        }
+        speakText(result.answer);
       }
     } catch (error) {
       console.error("Q&A Error:", error);
@@ -256,7 +252,7 @@ export function QAChat({ reportSummary }: QAChatProps) {
                   )}
                 </div>
               ))}
-              {isLoading && !isVoiceOutputEnabled && (
+              {isLoading && (
                 <div className="flex items-start gap-3">
                   <Avatar className="h-8 w-8">
                     <AvatarFallback className='bg-primary text-primary-foreground'><Bot className="h-5 w-5"/></AvatarFallback>
@@ -294,5 +290,3 @@ export function QAChat({ reportSummary }: QAChatProps) {
     </>
   );
 }
-
-    

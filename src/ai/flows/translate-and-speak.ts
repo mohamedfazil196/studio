@@ -75,32 +75,45 @@ const translateAndSpeakFlow = ai.defineFlow(
       throw new Error('Translation failed.');
     }
 
-    // 2. Convert translated text to speech
-    const { media } = await ai.generate({
-      model: googleAI.model('gemini-2.5-flash-preview-tts'),
-      config: {
-        responseModalities: ['AUDIO'],
-        speechConfig: {
-          voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: 'Algenib' }, // A generic voice
-          },
-        },
-      },
-      prompt: translatedText,
-    });
-    if (!media) {
-      throw new Error('no media returned');
+    try {
+        // 2. Convert translated text to speech
+        const { media } = await ai.generate({
+            model: googleAI.model('gemini-2.5-flash-preview-tts'),
+            config: {
+                responseModalities: ['AUDIO'],
+                speechConfig: {
+                voiceConfig: {
+                    prebuiltVoiceConfig: { voiceName: 'Algenib' }, // A generic voice
+                },
+                },
+            },
+            prompt: translatedText,
+        });
+
+        if (!media) {
+            throw new Error('no media returned');
+        }
+        
+        const audioBuffer = Buffer.from(
+            media.url.substring(media.url.indexOf(',') + 1),
+            'base64'
+        );
+        
+        const wavBase64 = await toWav(audioBuffer);
+        
+        return {
+            translatedText: translatedText,
+            audioDataUri: 'data:audio/wav;base64,' + wavBase64,
+        };
+
+    } catch (error) {
+        console.error("Text-to-speech failed, likely due to rate limits.", error);
+        // If TTS fails, still return the translated text but with an empty audio URI.
+        // The client-side will handle this gracefully.
+        return {
+            translatedText: translatedText,
+            audioDataUri: '',
+        };
     }
-    const audioBuffer = Buffer.from(
-      media.url.substring(media.url.indexOf(',') + 1),
-      'base64'
-    );
-    
-    const wavBase64 = await toWav(audioBuffer);
-    
-    return {
-      translatedText: translatedText,
-      audioDataUri: 'data:audio/wav;base64,' + wavBase64,
-    };
   }
 );

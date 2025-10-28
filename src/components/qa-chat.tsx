@@ -102,42 +102,41 @@ export function QAChat({ reportSummary }: QAChatProps) {
   }, [messages, isLoading]);
 
   useEffect(() => {
-    // Speech Recognition Setup
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (SpeechRecognition) {
-        const recognition = new SpeechRecognition();
-        recognition.continuous = true;
-        recognition.interimResults = true;
+      const recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = true;
 
-        recognition.onresult = (event) => {
-            let finalTranscript = '';
-            for (let i = event.resultIndex; i < event.results.length; ++i) {
-                if (event.results[i].isFinal) {
-                    finalTranscript += event.results[i][0].transcript;
-                }
-            }
-            if (finalTranscript) {
-              setInput(prev => prev.trim() + ' ' + finalTranscript.trim());
-            }
-        };
+      recognition.onresult = (event) => {
+        let interimTranscript = '';
+        let finalTranscript = '';
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            finalTranscript += event.results[i][0].transcript;
+          } else {
+            interimTranscript += event.results[i][0].transcript;
+          }
+        }
+        setInput(finalTranscript || interimTranscript);
+      };
 
-        recognition.onend = () => {
-            setIsListening(false);
-        };
+      recognition.onend = () => {
+        setIsListening(false);
+      };
 
-        recognition.onerror = (event) => {
-            toast({
-                title: "Voice Recognition Error",
-                description: `Error: ${event.error}. Please ensure your microphone is enabled.`,
-                variant: "destructive"
-            });
-            setIsListening(false);
-        };
-        
-        recognitionRef.current = recognition;
+      recognition.onerror = (event) => {
+        toast({
+          title: "Voice Recognition Error",
+          description: `Error: ${event.error}. Please ensure your microphone is enabled.`,
+          variant: "destructive"
+        });
+        setIsListening(false);
+      };
+
+      recognitionRef.current = recognition;
     }
 
-    // Cleanup speechSynthesis on component unmount
     return () => {
       handleStopSpeaking();
       if (recognitionRef.current) {
@@ -180,6 +179,7 @@ export function QAChat({ reportSummary }: QAChatProps) {
 
     if (recognitionRef.current && isListening) {
       recognitionRef.current.stop();
+      setIsListening(false);
     }
 
     const userMessage: Message = { role: 'user', content: currentInput };
@@ -345,5 +345,3 @@ export function QAChat({ reportSummary }: QAChatProps) {
     </>
   );
 }
-
-    

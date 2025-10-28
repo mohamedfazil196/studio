@@ -32,14 +32,17 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
   const finalTranscriptRef = useRef('');
 
   const stopSpeaking = useCallback(() => {
-    if (audioRef.current) {
+    if (audioRef.current && !audioRef.current.paused) {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
     }
-  }, []);
+    if (status === 'speaking') {
+      setStatus('idle');
+    }
+  }, [status]);
 
   const startListening = useCallback(() => {
-    if (isMuted || !recognitionRef.current || isProcessingRef.current || status === 'listening') {
+    if (isMuted || !recognitionRef.current || status === 'listening') {
       return;
     }
     try {
@@ -47,7 +50,7 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
       recognitionRef.current.start();
       setStatus("listening");
     } catch (e) {
-      // Already started, ignore
+      // Ignore errors if already started
     }
   }, [isMuted, status]);
 
@@ -118,65 +121,62 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
       return;
     }
 
-    recognitionRef.current = new SpeechRecognition();
-    recognitionRef.current.continuous = true; // Keep listening
-    recognitionRef.current.interimResults = true; // Get results as user speaks
+    if (!recognitionRef.current) {
+        recognitionRef.current = new SpeechRecognition();
+        recognitionRef.current.continuous = true;
+        recognitionRef.current.interimResults = true;
 
-    recognitionRef.current.onresult = (event) => {
-        stopSpeaking();
-        let interimTranscript = '';
-        finalTranscriptRef.current = '';
-        for (let i = 0; i < event.results.length; ++i) {
-            if (event.results[i].isFinal) {
-                finalTranscriptRef.current += event.results[i][0].transcript;
-            } else {
-                interimTranscript += event.results[i][0].transcript;
+        recognitionRef.current.onresult = (event) => {
+            let interimTranscript = '';
+            let finalTranscript = '';
+            for (let i = 0; i < event.results.length; ++i) {
+                if (event.results[i].isFinal) {
+                    finalTranscript += event.results[i][0].transcript;
+                } else {
+                    interimTranscript += event.results[i][0].transcript;
+                }
             }
-        }
+            finalTranscriptRef.current = finalTranscript;
+            
+            // Barge-in: if user starts speaking while bot is speaking
+            if (status === 'speaking' && (interimTranscript.length > 0 || finalTranscriptRef.current.length > 0)) {
+                stopSpeaking();
+            }
+        };
         
-        // Barge-in: if user starts speaking while bot is speaking
-        if (status === 'speaking' && (interimTranscript.length > 0 || finalTranscriptRef.current.length > 0)) {
-            stopSpeaking();
-        }
+        recognitionRef.current.onerror = (event) => {
+            if (event.error !== 'no-speech' && event.error !== 'aborted' && event.error !== 'network') {
+                console.error("Speech recognition error:", event.error);
+            }
+        };
 
-        // When a final result is received, we stop recognition and process
-        if (finalTranscriptRef.current.trim() && recognitionRef.current) {
-            recognitionRef.current.stop();
-        }
-    };
-    
-    recognitionRef.current.onerror = (event) => {
-        if (event.error !== 'no-speech' && event.error !== 'aborted' && event.error !== 'network') {
-            console.error("Speech recognition error:", event.error);
-        }
-    };
+        recognitionRef.current.onend = () => {
+            if (status === 'listening') {
+                 const transcriptToProcess = finalTranscriptRef.current.trim();
+                if (transcriptToProcess && !isProcessingRef.current) {
+                    processAndRespond(transcriptToProcess);
+                } else if (!isProcessingRef.current) {
+                    startListening();
+                }
+            }
+        };
+    }
 
-    recognitionRef.current.onend = () => {
-        if (isProcessingRef.current) return;
-
-        const transcriptToProcess = finalTranscriptRef.current.trim();
-        if (transcriptToProcess) {
-            setStatus('thinking');
-            processAndRespond(transcriptToProcess);
-        } else {
-            setStatus('idle');
-            startListening();
-        }
-    };
-
-    audioRef.current = new Audio();
-    audioRef.current.onended = () => {
-      isProcessingRef.current = false;
-      setStatus('idle');
-      startListening();
-    };
-    audioRef.current.onpause = () => {
-      if (status === 'speaking') {
-           isProcessingRef.current = false;
-           setStatus('idle');
-           startListening();
-      }
-    };
+    if (!audioRef.current) {
+        audioRef.current = new Audio();
+        audioRef.current.onended = () => {
+          isProcessingRef.current = false;
+          setStatus('idle');
+          startListening();
+        };
+        audioRef.current.onpause = () => {
+          if (status === 'speaking') {
+               isProcessingRef.current = false;
+               setStatus('idle');
+               startListening();
+          }
+        };
+    }
 
     startListening();
 

@@ -50,6 +50,7 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
     utterance.onstart = () => setStatus("speaking");
     utterance.onend = () => setStatus("idle");
     utterance.onerror = (e) => {
+        console.error("Speech synthesis error", e);
         setStatus("idle");
         toast({
             title: "Voice Error",
@@ -106,6 +107,7 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
   const handleManualStop = () => {
     if (status === 'listening') {
       stopListening();
+      processAndRespond(finalTranscriptRef.current);
     }
   }
 
@@ -143,8 +145,6 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
         };
         
         recognition.onend = () => {
-            // This is the key change: only process if the status is still 'listening'
-            // which means it wasn't manually stopped with a result.
             if (status === 'listening') {
                 processAndRespond(finalTranscriptRef.current);
             }
@@ -170,9 +170,8 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
   }, [status, processAndRespond, onClose, toast]);
   
   useEffect(() => {
-    // Automatically start listening when the component is ready and not muted
     if (status === "idle") {
-        const timer = setTimeout(() => startListening(), 250); // Small delay
+        const timer = setTimeout(() => startListening(), 250);
         return () => clearTimeout(timer);
     }
   }, [status, startListening]);
@@ -181,7 +180,10 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
     if (status === "muted") {
       setStatus("idle");
     } else {
-      stopListening();
+      if (status === 'listening') {
+        stopListening();
+        processAndRespond(finalTranscriptRef.current);
+      }
       window.speechSynthesis.cancel();
       setStatus("muted");
     }
@@ -264,8 +266,8 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
           </button>
           
           <button
-            onClick={status === 'listening' ? handleManualStop : startListening}
-            disabled={status === 'thinking' || status === 'speaking'}
+            onClick={handleManualStop}
+            disabled={status === 'thinking' || status === 'speaking' || status === 'muted'}
             aria-label={status === 'listening' ? 'Stop Listening' : 'Start Listening'}
             className={cn(
                 "w-20 h-20 rounded-full flex items-center justify-center bg-white text-black hover:bg-white/90 transition-all duration-300 disabled:bg-gray-400 disabled:scale-90",

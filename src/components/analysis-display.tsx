@@ -110,7 +110,7 @@ export function AnalysisDisplay({ fileName, analysis }: AnalysisDisplayProps) {
         console.error("AI speech error:", error);
         toast({
           title: "Voice Generation Failed",
-          description: "Could not generate audio for the selected language.",
+          description: "Could not generate audio, possibly due to service rate limits. Please try again in a moment.",
           variant: "destructive"
         });
         setIsPlaying(false);

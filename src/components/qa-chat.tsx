@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Bot, User, Send, Loader2, Square } from 'lucide-react';
+import { Bot, User, Send, Loader2, Square, Mic, MicOff } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -77,13 +77,16 @@ export function QAChat({ reportSummary }: QAChatProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [isVoiceOutputEnabled, setIsVoiceOutputEnabled] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+
   const { toast } = useToast();
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
 
   const handleStopSpeaking = useCallback(() => {
-    if (window.speechSynthesis.speaking) {
+    if (typeof window !== 'undefined' && window.speechSynthesis && window.speechSynthesis.speaking) {
       window.speechSynthesis.cancel();
       setIsSpeaking(false);
     }
@@ -99,11 +102,49 @@ export function QAChat({ reportSummary }: QAChatProps) {
   }, [messages, isLoading]);
 
   useEffect(() => {
+    // Speech Recognition Setup
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition) {
+        const recognition = new SpeechRecognition();
+        recognition.continuous = true;
+        recognition.interimResults = true;
+
+        recognition.onresult = (event) => {
+            let finalTranscript = '';
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+                if (event.results[i].isFinal) {
+                    finalTranscript += event.results[i][0].transcript;
+                }
+            }
+            if (finalTranscript) {
+              setInput(prev => prev.trim() + ' ' + finalTranscript.trim());
+            }
+        };
+
+        recognition.onend = () => {
+            setIsListening(false);
+        };
+
+        recognition.onerror = (event) => {
+            toast({
+                title: "Voice Recognition Error",
+                description: `Error: ${event.error}. Please ensure your microphone is enabled.`,
+                variant: "destructive"
+            });
+            setIsListening(false);
+        };
+        
+        recognitionRef.current = recognition;
+    }
+
     // Cleanup speechSynthesis on component unmount
     return () => {
       handleStopSpeaking();
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
     };
-  }, [handleStopSpeaking]);
+  }, [handleStopSpeaking, toast]);
 
   const speakText = (text: string) => {
     if (!isVoiceOutputEnabled || typeof window === 'undefined' || !window.speechSynthesis) {
@@ -112,7 +153,6 @@ export function QAChat({ reportSummary }: QAChatProps) {
     
     handleStopSpeaking();
     
-    // Remove markdown asterisks for cleaner speech
     const cleanText = text.replace(/\*\*/g, '');
     const utterance = new SpeechSynthesisUtterance(cleanText);
     utteranceRef.current = utterance;
@@ -137,6 +177,10 @@ export function QAChat({ reportSummary }: QAChatProps) {
     if (!currentInput || isLoading) return;
 
     handleStopSpeaking();
+
+    if (recognitionRef.current && isListening) {
+      recognitionRef.current.stop();
+    }
 
     const userMessage: Message = { role: 'user', content: currentInput };
     const newMessages = [...messages, userMessage];
@@ -184,6 +228,24 @@ export function QAChat({ reportSummary }: QAChatProps) {
       handleStopSpeaking();
     }
   };
+  
+  const handleListen = () => {
+    if (!recognitionRef.current) {
+        toast({
+            title: "Voice Recognition Not Supported",
+            description: "Your browser does not support voice recognition.",
+            variant: "destructive"
+        });
+        return;
+    }
+
+    if (isListening) {
+        recognitionRef.current.stop();
+    } else {
+        recognitionRef.current.start();
+        setIsListening(true);
+    }
+  }
 
   return (
     <>
@@ -215,7 +277,7 @@ export function QAChat({ reportSummary }: QAChatProps) {
                 <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground p-4">
                   <Bot className="w-12 h-12 mb-4" />
                   <p className="font-semibold">No questions asked yet.</p>
-                  <p className="text-sm">Start the conversation by typing below!</p>
+                  <p className="text-sm">Start the conversation by typing or using the mic below!</p>
                 </div>
               ) : messages.map((message, index) => (
                 <div
@@ -265,10 +327,14 @@ export function QAChat({ reportSummary }: QAChatProps) {
             <Input
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Type your question..."
+              placeholder="Type your question or use the mic..."
               disabled={isLoading}
               autoComplete="off"
             />
+            <Button type="button" size="icon" variant={isListening ? "destructive" : "outline"} onClick={handleListen} disabled={isLoading}>
+                {isListening ? <MicOff className="h-4 w-4"/> : <Mic className="h-4 w-4" />}
+                <span className="sr-only">{isListening ? 'Stop listening' : 'Start listening'}</span>
+            </Button>
             <Button type="submit" size="icon" disabled={isLoading || !input.trim()}>
               {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               <span className="sr-only">Send</span>
@@ -279,3 +345,5 @@ export function QAChat({ reportSummary }: QAChatProps) {
     </>
   );
 }
+
+    

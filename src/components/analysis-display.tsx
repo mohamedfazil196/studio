@@ -13,6 +13,7 @@ import Link from 'next/link';
 import { QAChat } from "./qa-chat";
 import { translateText } from "@/ai/flows/translate-text";
 import { translateAndSpeak } from "@/ai/flows/translate-and-speak";
+import { textToSpeech } from "@/ai/flows/text-to-speech";
 
 type AnalysisDisplayProps = {
   fileName: string;
@@ -65,58 +66,54 @@ export function AnalysisDisplay({ fileName, analysis }: AnalysisDisplayProps) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const handleStopSpeaking = useCallback(() => {
-    if (audioRef.current) {
+    if (audioRef.current && !audioRef.current.paused) {
         audioRef.current.pause();
         audioRef.current.currentTime = 0;
+    }
+     if (typeof window !== 'undefined' && window.speechSynthesis && window.speechSynthesis.speaking) {
+      window.speechSynthesis.cancel();
     }
     setIsPlaying(false);
   }, []);
 
   const speakText = async (text: string, lang: string) => {
-    if (lang === 'en') {
-      // Use browser TTS for English for speed, as it's generally well-supported.
-      if (typeof window === 'undefined' || !window.speechSynthesis) return;
-      handleStopSpeaking();
-      const cleanText = text.replace(/\*\*/g, '');
-      const utterance = new SpeechSynthesisUtterance(cleanText);
-      utterance.lang = lang;
-      utterance.onstart = () => setIsPlaying(true);
-      utterance.onend = () => setIsPlaying(false);
-      utterance.onerror = (e) => {
-        setIsPlaying(false);
-        toast({
-          title: "Voice Error",
-          description: "Could not play audio. Your browser might not support this language.",
-          variant: "destructive"
-        });
-      };
-      window.speechSynthesis.speak(utterance);
-    } else {
-      // Use server-side TTS for other languages
-      setIsPreparingAudio(true);
-      try {
-        const result = await translateAndSpeak({ text: analysis.patientSummary, targetLanguage: lang });
-        if (result.audioDataUri) {
-            setTranslatedSummary(result.translatedText);
-            if (audioRef.current) {
-                audioRef.current.src = result.audioDataUri;
-                audioRef.current.play();
-                setIsPlaying(true);
-            }
+    handleStopSpeaking();
+    setIsPreparingAudio(true);
+    
+    try {
+        let audioDataUri = '';
+        let spokenText = text;
+
+        if (lang === 'en') {
+            // For English, we can directly use a generic TTS flow
+            const result = await textToSpeech({ text });
+            audioDataUri = result.audioDataUri;
         } else {
-             throw new Error("Text-to-speech did not return audio.");
+            // For other languages, we need to translate first, then speak
+            const result = await translateAndSpeak({ text: analysis.patientSummary, targetLanguage: lang });
+            audioDataUri = result.audioDataUri;
+            spokenText = result.translatedText; // Use the translated text from the flow
         }
-      } catch (error) {
+        
+        setTranslatedSummary(spokenText);
+
+        if (audioDataUri && audioRef.current) {
+            audioRef.current.src = audioDataUri;
+            audioRef.current.play();
+        } else {
+            throw new Error("AI voice generation failed. The service may be temporarily unavailable.");
+        }
+
+    } catch (error: any) {
         console.error("AI speech error:", error);
         toast({
           title: "Voice Generation Failed",
-          description: "Could not generate audio, possibly due to service rate limits. Please try again in a moment.",
+          description: error.message || "Could not generate audio, possibly due to service limits. Please try again in a moment.",
           variant: "destructive"
         });
         setIsPlaying(false);
-      } finally {
+    } finally {
         setIsPreparingAudio(false);
-      }
     }
   };
 
@@ -175,9 +172,6 @@ export function AnalysisDisplay({ fileName, analysis }: AnalysisDisplayProps) {
         audio.removeEventListener('play', onPlay);
         audio.removeEventListener('pause', onPause);
         audio.removeEventListener('ended', onEnded);
-      }
-      if (typeof window !== 'undefined' && window.speechSynthesis) {
-        window.speechSynthesis.cancel();
       }
     };
   }, [handleStopSpeaking]);

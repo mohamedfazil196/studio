@@ -1,93 +1,19 @@
 
 "use client";
 
-import { useState, useEffect, useRef, useCallback, useReducer } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { X, Mic, MicOff, Square } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { askQuestion } from "@/ai/flows/enable-interactive-q-and-a";
 import { textToSpeech } from "@/ai/flows/text-to-speech";
 
-// --- State Machine ---
+type Status = "idle" | "listening" | "thinking" | "speaking" | "muted";
 
 type Message = {
   role: "user" | "bot";
   content: string;
 };
-
-type State = {
-  status: "idle" | "listening" | "thinking" | "speaking" | "muted";
-  chatHistory: Message[];
-};
-
-type Action =
-  | { type: "START_LISTENING" }
-  | { type: "STOP_LISTENING" }
-  | { type: "PROCESS_SPEECH"; transcript: string }
-  | { type: "BOT_RESPONSE"; botMessage: Message }
-  | { type: "START_SPEAKING" }
-  | { type: "FINISH_SPEAKING" }
-  | { type: "MUTE" }
-  | { type: "UNMUTE" }
-  | { type: "ERROR"; error?: any };
-
-const initialState: State = {
-  status: "idle",
-  chatHistory: [],
-};
-
-function reducer(state: State, action: Action): State {
-  switch (action.type) {
-    case "START_LISTENING":
-      if (["idle", "speaking", "muted"].includes(state.status)) {
-        return { ...state, status: "listening" };
-      }
-      return state;
-    case "STOP_LISTENING":
-      if (state.status === "listening") {
-        return { ...state, status: "idle" };
-      }
-      return state;
-    case "PROCESS_SPEECH":
-      if (!action.transcript.trim()) {
-        return { ...state, status: "idle" }; // Go back to idle if transcript is empty
-      }
-      return {
-        ...state,
-        status: "thinking",
-        chatHistory: [...state.chatHistory, { role: "user", content: action.transcript }],
-      };
-    case "BOT_RESPONSE":
-       const nextStatus = state.status === 'muted' ? 'muted' : 'speaking';
-       return {
-        ...state,
-        status: nextStatus,
-        chatHistory: [...state.chatHistory, action.botMessage],
-      };
-    case "START_SPEAKING":
-       if(state.status === 'thinking') {
-          return { ...state, status: 'speaking' };
-       }
-       return state;
-    case "FINISH_SPEAKING":
-      if (state.status === "speaking" || state.status === 'muted') {
-        return { ...state, status: "idle" };
-      }
-      return state;
-    case "MUTE":
-      return { ...state, status: "muted" };
-    case "UNMUTE":
-      // If was muted, go to idle to restart listening cycle
-      return { ...state, status: "idle" };
-    case "ERROR":
-      console.error("An error occurred in the conversation:", action.error);
-      return { ...state, status: "idle" };
-    default:
-      return state;
-  }
-}
-
-// --- Component ---
 
 interface LiveConversationProps {
   reportSummary: string;
@@ -95,46 +21,95 @@ interface LiveConversationProps {
 }
 
 export function LiveConversation({ reportSummary, onClose }: LiveConversationProps) {
-  const [state, dispatch] = useReducer(reducer, initialState);
+  const [status, setStatus] = useState<Status>("idle");
+  const [chatHistory, setChatHistory] = useState<Message[]>([]);
   const { toast } = useToast();
 
-  const audioRef = useRef<HTMLAudioElement | null>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
-  const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const transcriptRef = useRef("");
-  
+  const isProcessingRef = useRef(false);
+
   // --- Core Actions ---
+
   const stopSpeaking = useCallback(() => {
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.src = "";
     }
-    if (state.status === 'speaking') {
-      dispatch({ type: 'FINISH_SPEAKING' });
+    if (status === 'speaking') {
+      setStatus("idle");
     }
-  }, [state.status]);
+  }, [status]);
 
   const stopListening = useCallback(() => {
-     if (silenceTimerRef.current) {
-        clearTimeout(silenceTimerRef.current);
-        silenceTimerRef.current = null;
+    if (recognitionRef.current && status === "listening") {
+      recognitionRef.current.stop();
     }
-    if (recognitionRef.current && state.status === "listening") {
-        recognitionRef.current.stop();
-    }
-  }, [state.status]);
+  }, [status]);
 
   const startListening = useCallback(() => {
-    if (recognitionRef.current && state.status !== 'listening') {
-      try {
-        transcriptRef.current = "";
-        recognitionRef.current.start();
-        dispatch({ type: 'START_LISTENING' });
-      } catch (e) {
-        // Already started, which is fine
-      }
+    if (isProcessingRef.current || status !== 'idle' || !recognitionRef.current) {
+      return;
     }
-  }, [state.status]);
+    try {
+      transcriptRef.current = "";
+      recognitionRef.current.start();
+      setStatus("listening");
+    } catch (e) {
+      // Already started, which can happen. It's fine.
+    }
+  }, [status]);
+  
+  const processAndRespond = useCallback(async (transcript: string) => {
+    if (isProcessingRef.current || !transcript.trim()) {
+      setStatus("idle");
+      return;
+    }
+
+    isProcessingRef.current = true;
+    setStatus("thinking");
+
+    const userMessage: Message = { role: 'user', content: transcript };
+    const newChatHistory = [...chatHistory, userMessage];
+    setChatHistory(newChatHistory);
+
+    try {
+      // 1. Get AI text response
+      const questionResult = await askQuestion({
+        reportSummary,
+        question: transcript,
+        chatHistory: newChatHistory.slice(0, -1),
+      });
+      const botMessage: Message = { role: "bot", content: questionResult.answer };
+      setChatHistory(prev => [...prev, botMessage]);
+
+      if (status === 'muted') {
+        setStatus('muted');
+        isProcessingRef.current = false;
+        return;
+      }
+
+      // 2. Get AI audio response
+      setStatus("speaking");
+      const ttsResult = await textToSpeech({ text: botMessage.content });
+
+      if (ttsResult.audioDataUri && audioRef.current) {
+        audioRef.current.src = ttsResult.audioDataUri;
+        await audioRef.current.play();
+        // The `onended` event on the audio element will transition the state.
+      } else {
+        // If TTS fails, go back to idle
+        setStatus("idle");
+      }
+
+    } catch (error) {
+      console.error("Error during processing/responding:", error);
+      setStatus("idle");
+    } finally {
+      isProcessingRef.current = false;
+    }
+  }, [chatHistory, reportSummary, status]);
 
 
   // --- Effects for Setup and State Transitions ---
@@ -144,7 +119,7 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
     if (!SpeechRecognition) {
       toast({
         title: "Browser Not Supported",
-        description: "Live conversation is not available in this browser.",
+        description: "Live conversation is not available on this browser.",
         variant: "destructive",
       });
       onClose();
@@ -152,146 +127,60 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
     }
 
     recognitionRef.current = new SpeechRecognition();
-    recognitionRef.current.continuous = true; // Keep listening even after pauses
-    recognitionRef.current.interimResults = true;
+    const recognition = recognitionRef.current;
+    recognition.continuous = false; // Let the browser handle end of speech
+    recognition.interimResults = false;
 
-    recognitionRef.current.onresult = (event) => {
-        if (state.status === 'speaking') {
-            stopSpeaking();
-            // We can dispatch START_LISTENING here for faster barge-in
-            // The onend of the speaking audio will also try to do this.
-            startListening();
-        }
-
-        if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-
-        let interimTranscript = '';
-        let finalTranscript = '';
-
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-            if (event.results[i].isFinal) {
-                finalTranscript += event.results[i][0].transcript;
-            } else {
-                interimTranscript += event.results[i][0].transcript;
-            }
-        }
-        
-        transcriptRef.current = finalTranscript || interimTranscript;
-
-        silenceTimerRef.current = setTimeout(() => {
-            stopListening();
-        }, 1200); // 1.2 seconds of silence
+    recognition.onresult = (event) => {
+      transcriptRef.current = event.results[event.results.length - 1][0].transcript;
     };
     
-    recognitionRef.current.onend = () => {
-        if (state.status === 'listening') { // Only process if we were listening
-            dispatch({ type: "STOP_LISTENING" });
-            if (transcriptRef.current) {
-                dispatch({ type: 'PROCESS_SPEECH', transcript: transcriptRef.current });
-            }
-        }
+    recognition.onend = () => {
+      if (status === 'listening') {
+        processAndRespond(transcriptRef.current);
+      }
     };
     
-    recognitionRef.current.onerror = (event) => {
-        if (event.error !== 'no-speech' && event.error !== 'aborted' && event.error !== 'network') {
-            dispatch({ type: 'ERROR', error: event.error });
-        }
+    recognition.onerror = (event) => {
+      if (event.error !== 'no-speech' && event.error !== 'aborted' && event.error !== 'network') {
+        console.error("Speech recognition error:", event.error);
+        toast({ title: "Speech Error", description: event.error, variant: 'destructive' });
+      }
+      setStatus("idle");
     };
     
     audioRef.current = new Audio();
-    audioRef.current.onended = () => dispatch({ type: "FINISH_SPEAKING" });
-
-    // Initial start
-    startListening();
+    audioRef.current.onended = () => setStatus("idle");
 
     return () => {
-      stopListening();
-      stopSpeaking();
+      recognition.stop();
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Only run on mount
-
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Effect to automatically start listening when idle
   useEffect(() => {
-    if (state.status === "idle") {
-      startListening();
+    if (status === "idle") {
+      // Use a small timeout to prevent immediate re-listening loops
+      const timer = setTimeout(() => startListening(), 100);
+      return () => clearTimeout(timer);
     }
-  }, [state.status, startListening])
-
-  // Effect to process the response when 'thinking'
-  useEffect(() => {
-      if (state.status !== 'thinking') return;
-      
-      const process = async () => {
-        const lastUserMessage = state.chatHistory[state.chatHistory.length - 1];
-        if (!lastUserMessage || lastUserMessage.role !== 'user') return;
-        
-        try {
-            const questionResult = await askQuestion({
-                reportSummary,
-                question: lastUserMessage.content,
-                chatHistory: state.chatHistory.slice(0, -1),
-            });
-
-            const botMessage: Message = { role: "bot", content: questionResult.answer };
-            dispatch({ type: "BOT_RESPONSE", botMessage });
-            
-        } catch (error) {
-            dispatch({type: 'ERROR', error });
-        }
-      };
-
-      process();
-
-  }, [state.status, state.chatHistory, reportSummary]);
-
-
-  // Effect to speak when status becomes 'speaking'
-  useEffect(() => {
-    if (state.status !== 'speaking') return;
-
-    const speak = async () => {
-        const lastBotMessage = state.chatHistory[state.chatHistory.length-1];
-        if (!lastBotMessage || lastBotMessage.role !== 'bot' || !lastBotMessage.content) {
-            dispatch({ type: 'FINISH_SPEAKING' });
-            return;
-        }
-
-        try {
-            const ttsResult = await textToSpeech({ text: lastBotMessage.content });
-            if (ttsResult.audioDataUri && audioRef.current) {
-                audioRef.current.src = ttsResult.audioDataUri;
-                await audioRef.current.play();
-            } else {
-                 dispatch({ type: "FINISH_SPEAKING" });
-            }
-        } catch (error) {
-            dispatch({type: 'ERROR', error});
-        }
-    }
-    speak();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.status, state.chatHistory]);
-
+  }, [status, startListening])
 
   // --- User Actions ---
   const handleMuteToggle = () => {
-    if (state.status === "muted") {
-        dispatch({ type: "UNMUTE" });
+    if (status === "muted") {
+      setStatus("idle"); // Unmute and go to idle to restart cycle
     } else {
-        stopSpeaking();
-        stopListening(); // Stop current listening session before muting
-        dispatch({ type: "MUTE" });
-    }
-  };
-
-  const handleStopListening = () => {
-    if (state.status === 'listening') {
+      stopSpeaking();
       stopListening();
+      setStatus("muted");
     }
   };
-
+  
   const handleClose = () => {
     stopListening();
     stopSpeaking();
@@ -299,8 +188,7 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
   }
   
   // --- UI ---
-
-  const statusText = {
+  const statusText: Record<Status, string> = {
       idle: "Tap the mic to speak",
       listening: "Listening...",
       thinking: "Thinking...",
@@ -312,44 +200,42 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
     <div className="fixed inset-0 z-50 bg-black/80 flex flex-col items-center justify-center animate-fade-in" onClick={(e) => e.target === e.currentTarget && handleClose()}>
       <div className="w-full h-full flex flex-col items-center justify-center p-4">
         
-        {/* Animated Orb */}
         <div className="relative flex items-center justify-center w-64 h-64">
             <div className={cn(
                 "absolute rounded-full bg-primary/20 transition-all duration-500",
-                state.status === 'listening' && 'w-64 h-64 animate-pulse',
-                state.status === 'speaking' && 'w-56 h-56 animate-pulse',
-                state.status === 'thinking' && 'w-48 h-48 animate-spin-slow',
-                (state.status === 'idle' || state.status === 'muted') && 'w-48 h-48',
+                status === 'listening' && 'w-64 h-64 animate-pulse',
+                status === 'speaking' && 'w-56 h-56 animate-pulse',
+                status === 'thinking' && 'w-48 h-48 animate-spin-slow',
+                (status === 'idle' || status === 'muted') && 'w-48 h-48',
             )}></div>
             <div className={cn(
                 "absolute rounded-full bg-primary/40 transition-all duration-500",
-                state.status === 'listening' && 'w-56 h-56 animate-pulse [animation-delay:100ms]',
-                state.status === 'speaking' && 'w-48 h-48 animate-pulse [animation-delay:100ms]',
-                state.status === 'thinking' && 'w-40 h-40 animate-spin-slow [animation-direction:reverse]',
-                (state.status === 'idle' || state.status === 'muted') && 'w-40 h-40',
+                status === 'listening' && 'w-56 h-56 animate-pulse [animation-delay:100ms]',
+                status === 'speaking' && 'w-48 h-48 animate-pulse [animation-delay:100ms]',
+                status === 'thinking' && 'w-40 h-40 animate-spin-slow [animation-direction:reverse]',
+                (status === 'idle' || status === 'muted') && 'w-40 h-40',
             )}></div>
             <div className="absolute rounded-full w-32 h-32 bg-primary"></div>
         </div>
 
         <p className="mt-8 text-xl text-white/80 h-8 transition-opacity duration-300">
-          {statusText[state.status]}
+          {statusText[status]}
         </p>
         
-        {/* Controls */}
         <div className="absolute bottom-10 flex items-center justify-center w-full gap-6">
           <button
             onClick={handleMuteToggle}
             className="w-16 h-16 rounded-full flex items-center justify-center bg-white/10 text-white hover:bg-white/20 transition-colors"
           >
-            {state.status === "muted" ? <MicOff size={28} /> : <Mic size={28} />}
+            {status === "muted" ? <MicOff size={28} /> : <Mic size={28} />}
           </button>
           
           <button
-            onClick={handleStopListening}
-            disabled={state.status !== 'listening'}
+            onClick={stopListening}
+            disabled={status !== 'listening'}
             className={cn(
                 "w-20 h-20 rounded-full flex items-center justify-center bg-white text-black hover:bg-white/90 transition-all duration-300 disabled:bg-gray-400 disabled:scale-90",
-                state.status === 'listening' ? 'scale-100 opacity-100' : 'scale-0 opacity-0'
+                status === 'listening' ? 'scale-100 opacity-100' : 'scale-0 opacity-0'
             )}
           >
             <Square size={32} />
@@ -366,3 +252,5 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
     </div>
   );
 }
+
+    

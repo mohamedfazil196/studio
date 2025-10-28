@@ -109,7 +109,10 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
       audioRef.current.pause();
       audioRef.current.src = "";
     }
-  }, []);
+    if (state.status === 'speaking') {
+      dispatch({ type: 'FINISH_SPEAKING' });
+    }
+  }, [state.status]);
 
   const stopListening = useCallback(() => {
      if (silenceTimerRef.current) {
@@ -155,9 +158,9 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
     recognitionRef.current.onresult = (event) => {
         if (state.status === 'speaking') {
             stopSpeaking();
-            // Transition directly to listening, which will be handled by the onend of the speaking audio
-            // but we can also force it here for faster response.
-            dispatch({ type: 'START_LISTENING' });
+            // We can dispatch START_LISTENING here for faster barge-in
+            // The onend of the speaking audio will also try to do this.
+            startListening();
         }
 
         if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
@@ -177,7 +180,7 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
 
         silenceTimerRef.current = setTimeout(() => {
             stopListening();
-        }, 1000); // 1 second of silence
+        }, 1200); // 1.2 seconds of silence
     };
     
     recognitionRef.current.onend = () => {
@@ -222,7 +225,7 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
       
       const process = async () => {
         const lastUserMessage = state.chatHistory[state.chatHistory.length - 1];
-        if (lastUserMessage.role !== 'user') return;
+        if (!lastUserMessage || lastUserMessage.role !== 'user') return;
         
         try {
             const questionResult = await askQuestion({
@@ -250,7 +253,7 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
 
     const speak = async () => {
         const lastBotMessage = state.chatHistory[state.chatHistory.length-1];
-        if (lastBotMessage.role !== 'bot' || !lastBotMessage.content) {
+        if (!lastBotMessage || lastBotMessage.role !== 'bot' || !lastBotMessage.content) {
             dispatch({ type: 'FINISH_SPEAKING' });
             return;
         }
@@ -284,7 +287,9 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
   };
 
   const handleStopListening = () => {
-    stopListening();
+    if (state.status === 'listening') {
+      stopListening();
+    }
   };
 
   const handleClose = () => {
@@ -361,5 +366,3 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
     </div>
   );
 }
-
-    

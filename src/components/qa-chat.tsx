@@ -144,10 +144,13 @@ export function QAChat({ reportSummary }: QAChatProps) {
           const speechResult = await textToSpeech({ text: result.answer });
           
           if (!speechResult.audioDataUri) {
-            setIsSpeaking(false);
-            // Optionally notify the user that TTS failed (e.g. rate limit)
-            toast({ title: "Audio Error", description: "Could not generate audio. You may have exceeded the daily limit.", variant: "destructive" });
-            return;
+             setIsSpeaking(false);
+             toast({ 
+                title: "Audio Error", 
+                description: "Could not generate audio. You may have exceeded the daily limit.", 
+                variant: "destructive" 
+             });
+             return; // Stop execution for this path
           }
 
           if (!audioRef.current) {
@@ -156,7 +159,10 @@ export function QAChat({ reportSummary }: QAChatProps) {
             audioRef.current.onpause = () => setIsSpeaking(false);
           }
           audioRef.current.src = speechResult.audioDataUri;
-          audioRef.current.play();
+          audioRef.current.play().catch(() => {
+             setIsSpeaking(false);
+             toast({ title: "Playback Error", description: "Could not play the audio.", variant: "destructive" });
+          });
         } catch (speechError) {
           console.error("TTS Error:", speechError);
           toast({ title: "Audio Error", description: "Could not generate audio for the response.", variant: "destructive" });
@@ -250,7 +256,7 @@ export function QAChat({ reportSummary }: QAChatProps) {
                   )}
                 </div>
               ))}
-              {isLoading && (
+              {isLoading && !isVoiceOutputEnabled && (
                 <div className="flex items-start gap-3">
                   <Avatar className="h-8 w-8">
                     <AvatarFallback className='bg-primary text-primary-foreground'><Bot className="h-5 w-5"/></AvatarFallback>
@@ -288,3 +294,5 @@ export function QAChat({ reportSummary }: QAChatProps) {
     </>
   );
 }
+
+    

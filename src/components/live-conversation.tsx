@@ -30,7 +30,6 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
-  const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const transcriptRef = useRef<string>("");
   const isProcessingRef = useRef(false);
 
@@ -39,12 +38,11 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
     }
-    isProcessingRef.current = false;
   }, []);
   
   const startListening = useCallback(() => {
     if (isMuted || !recognitionRef.current || isProcessingRef.current) {
-        setStatus("idle");
+        if (!isProcessingRef.current) setStatus("idle");
         return;
     }
     try {
@@ -91,7 +89,6 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
         audioRef.current.src = ttsResult.audioDataUri;
         audioRef.current.play();
       } else {
-        // If TTS fails (e.g., rate limit), just end the bot's turn.
         isProcessingRef.current = false;
         startListening();
       }
@@ -131,24 +128,17 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
             setStatus('listening');
         }
 
-        if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-
-        let interimTranscript = '';
         let finalTranscript = '';
         for (let i = event.resultIndex; i < event.results.length; ++i) {
             if (event.results[i].isFinal) {
                 finalTranscript += event.results[i][0].transcript;
-            } else {
-                interimTranscript += event.results[i][0].transcript;
             }
         }
-        transcriptRef.current = finalTranscript || interimTranscript;
         
-        silenceTimerRef.current = setTimeout(() => {
-            if (recognitionRef.current && status === 'listening') {
-                recognitionRef.current.stop(); // This will trigger 'onend'
-            }
-        }, SILENCE_TIMEOUT);
+        if (finalTranscript && recognitionRef.current) {
+            transcriptRef.current = finalTranscript;
+            recognitionRef.current.stop(); // Stop listening once a final result is in.
+        }
     };
     
     recognitionRef.current.onerror = (event) => {
@@ -158,12 +148,10 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
     };
 
     recognitionRef.current.onend = () => {
-        if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-        
         if (transcriptRef.current.trim() && !isProcessingRef.current) {
             processAndRespond(transcriptRef.current);
         } else if (!isProcessingRef.current && !isMuted) {
-            startListening(); // If nothing was said, just start listening again.
+            startListening();
         }
     };
 
@@ -175,7 +163,7 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
 
     audioRef.current.onplay = () => {
         if(recognitionRef.current && !isMuted) {
-            // Keep listening for barge-in, but don't re-trigger this onplay logic
+           // Barge-in logic is handled in onresult
         }
     }
 
@@ -186,9 +174,6 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
       if (audioRef.current) {
         audioRef.current.pause();
       }
-      if (silenceTimerRef.current) {
-        clearTimeout(silenceTimerRef.current);
-      }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -197,7 +182,6 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
     setIsMuted(prevMuted => {
         const newMutedState = !prevMuted;
         if (newMutedState) { // Muting
-            if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
             recognitionRef.current?.stop();
             if(status === 'speaking'){
                 stopSpeaking();

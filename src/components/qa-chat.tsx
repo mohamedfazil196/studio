@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from 'react';
-import { Bot, User, Send, Loader2, Headset } from 'lucide-react';
+import { Bot, User, Send, Loader2, Headset, Square } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -170,6 +170,14 @@ export function QAChat({ reportSummary }: QAChatProps) {
     }
   };
 
+  const handleStopSpeaking = () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0; // Reset audio to the beginning
+      setIsSpeaking(false);
+    }
+  };
+
 
   return (
     <>
@@ -188,6 +196,12 @@ export function QAChat({ reportSummary }: QAChatProps) {
                 <div className="flex items-center space-x-2">
                     <Switch id="voice-output-mode" checked={isVoiceOutputEnabled} onCheckedChange={handleToggleVoiceOutput} />
                     <Label htmlFor="voice-output-mode">Voice Answers</Label>
+                    {isSpeaking && (
+                        <Button variant="destructive" size="icon" className="h-7 w-7" onClick={handleStopSpeaking}>
+                            <Square className="h-4 w-4" />
+                            <span className='sr-only'>Stop</span>
+                        </Button>
+                    )}
                 </div>
             </div>
           </div>

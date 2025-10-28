@@ -47,70 +47,66 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
       recognitionRef.current.stop();
     }
   }, [status]);
+  
+  const processAndRespond = useCallback(async (transcript: string) => {
+      if (!transcript) {
+        setStatus("idle");
+        return;
+      }
+  
+      isProcessingRef.current = true;
+      setStatus("thinking");
+  
+      const userMessage: Message = { role: 'user', content: transcript };
+      // Use a functional update to get the latest chat history
+      setChatHistory(prev => [...prev, userMessage]);
+  
+      try {
+        const questionResult = await askQuestion({
+          reportSummary,
+          question: transcript,
+          chatHistory: [...chatHistory, userMessage], // Pass the most up-to-date history
+        });
+        const botMessage: Message = { role: "bot", content: questionResult.answer };
+        setChatHistory(prev => [...prev, botMessage]);
+  
+        if (status === 'muted') {
+            isProcessingRef.current = false;
+            setStatus('muted');
+            return;
+        }
+  
+        setStatus("speaking");
+        const ttsResult = await textToSpeech({ text: botMessage.content });
+  
+        if (ttsResult.audioDataUri && audioRef.current) {
+          audioRef.current.src = ttsResult.audioDataUri;
+          await audioRef.current.play();
+        } else {
+          setStatus("idle");
+        }
+  
+      } catch (error) {
+        console.error("Error during processing/responding:", error);
+        setStatus("idle");
+      } finally {
+        isProcessingRef.current = false;
+      }
+    }, [chatHistory, reportSummary, status]);
+
 
   const startListening = useCallback(() => {
-    if (isProcessingRef.current || status !== 'idle' || !recognitionRef.current) {
+    if (isProcessingRef.current || (recognitionRef.current && status === "listening")) {
       return;
     }
     try {
       transcriptRef.current = "";
-      recognitionRef.current.start();
+      recognitionRef.current?.start();
       setStatus("listening");
     } catch (e) {
-      // Already started, which can happen. It's fine.
+      // Already started, it's fine.
     }
   }, [status]);
-  
-  const processAndRespond = useCallback(async (transcript: string) => {
-    if (isProcessingRef.current || !transcript.trim()) {
-      setStatus("idle");
-      return;
-    }
-
-    isProcessingRef.current = true;
-    setStatus("thinking");
-
-    const userMessage: Message = { role: 'user', content: transcript };
-    const newChatHistory = [...chatHistory, userMessage];
-    setChatHistory(newChatHistory);
-
-    try {
-      // 1. Get AI text response
-      const questionResult = await askQuestion({
-        reportSummary,
-        question: transcript,
-        chatHistory: newChatHistory.slice(0, -1),
-      });
-      const botMessage: Message = { role: "bot", content: questionResult.answer };
-      setChatHistory(prev => [...prev, botMessage]);
-
-      if (status === 'muted') {
-        setStatus('muted');
-        isProcessingRef.current = false;
-        return;
-      }
-
-      // 2. Get AI audio response
-      setStatus("speaking");
-      const ttsResult = await textToSpeech({ text: botMessage.content });
-
-      if (ttsResult.audioDataUri && audioRef.current) {
-        audioRef.current.src = ttsResult.audioDataUri;
-        await audioRef.current.play();
-        // The `onended` event on the audio element will transition the state.
-      } else {
-        // If TTS fails, go back to idle
-        setStatus("idle");
-      }
-
-    } catch (error) {
-      console.error("Error during processing/responding:", error);
-      setStatus("idle");
-    } finally {
-      isProcessingRef.current = false;
-    }
-  }, [chatHistory, reportSummary, status]);
-
 
   // --- Effects for Setup and State Transitions ---
 
@@ -126,9 +122,9 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
       return;
     }
 
-    recognitionRef.current = new SpeechRecognition();
-    const recognition = recognitionRef.current;
-    recognition.continuous = false; // Let the browser handle end of speech
+    const recognition = new SpeechRecognition();
+    recognitionRef.current = recognition;
+    recognition.continuous = false;
     recognition.interimResults = false;
 
     recognition.onresult = (event) => {
@@ -136,8 +132,9 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
     };
     
     recognition.onend = () => {
-      if (status === 'listening') {
-        processAndRespond(transcriptRef.current);
+      if (status === 'listening' && !isProcessingRef.current) {
+         const finalTranscript = transcriptRef.current.trim();
+         processAndRespond(finalTranscript);
       }
     };
     
@@ -149,14 +146,13 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
       setStatus("idle");
     };
     
-    audioRef.current = new Audio();
-    audioRef.current.onended = () => setStatus("idle");
+    const audio = new Audio();
+    audioRef.current = audio;
+    audio.onended = () => setStatus("idle");
 
     return () => {
       recognition.stop();
-      if (audioRef.current) {
-        audioRef.current.pause();
-      }
+      audio.pause();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -164,11 +160,10 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
   // Effect to automatically start listening when idle
   useEffect(() => {
     if (status === "idle") {
-      // Use a small timeout to prevent immediate re-listening loops
       const timer = setTimeout(() => startListening(), 100);
       return () => clearTimeout(timer);
     }
-  }, [status, startListening])
+  }, [status, startListening]);
 
   // --- User Actions ---
   const handleMuteToggle = () => {
@@ -189,7 +184,7 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
   
   // --- UI ---
   const statusText: Record<Status, string> = {
-      idle: "Tap the mic to speak",
+      idle: "Listening...",
       listening: "Listening...",
       thinking: "Thinking...",
       speaking: "Speaking...",
@@ -252,5 +247,3 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
     </div>
   );
 }
-
-    

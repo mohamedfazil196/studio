@@ -83,8 +83,8 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
   }, [status]);
   
   const processAndRespond = useCallback(async (transcript: string) => {
-      if (!transcript) {
-        setStatus("idle");
+      if (!transcript || isProcessingRef.current) {
+        if (!isProcessingRef.current) setStatus("idle");
         return;
       }
   
@@ -103,8 +103,8 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
         const botMessage: Message = { role: "bot", content: questionResult.answer };
         setChatHistory(prev => [...prev, botMessage]);
   
+        isProcessingRef.current = false;
         if (status === 'muted') {
-            isProcessingRef.current = false;
             setStatus('muted');
             return;
         }
@@ -113,11 +113,10 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
   
       } catch (error) {
         console.error("Error during processing/responding:", error);
-        setStatus("idle");
-      } finally {
         isProcessingRef.current = false;
+        setStatus("idle");
       }
-    }, [chatHistory, reportSummary, status]);
+    }, [chatHistory, reportSummary, status, speakText]);
 
 
   const startListening = useCallback(() => {
@@ -177,6 +176,9 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
     };
     
     recognition.onend = () => {
+      if (silenceTimerRef.current) {
+          clearTimeout(silenceTimerRef.current);
+      }
       if (status === 'listening' && !isProcessingRef.current) {
          const finalTranscript = transcriptRef.current.trim();
          if (finalTranscript) {
@@ -202,8 +204,7 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
         stopSpeaking();
         if(silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [onClose, stopListening, stopSpeaking, status, processAndRespond, toast]);
 
   useEffect(() => {
     if (status === "idle" && status !== 'muted') {

@@ -6,7 +6,6 @@ import { X, Mic, MicOff, Square } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { askQuestion } from "@/ai/flows/enable-interactive-q-and-a";
-import { textToSpeech } from "@/ai/flows/text-to-speech";
 
 type Status = "idle" | "listening" | "thinking" | "speaking" | "muted";
 
@@ -26,25 +25,60 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
   const { toast } = useToast();
 
   const recognitionRef = useRef<SpeechRecognition | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const transcriptRef = useRef("");
   const isProcessingRef = useRef(false);
+  const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // --- Core Actions ---
+
+  const speakText = (text: string) => {
+    if (typeof window === 'undefined' || !window.speechSynthesis) {
+        return;
+    }
+    
+    stopSpeaking();
+    
+    // Remove markdown for cleaner speech
+    const cleanText = text.replace(/\*\*/g, '');
+    const utterance = new SpeechSynthesisUtterance(cleanText);
+    utteranceRef.current = utterance;
+    
+    utterance.onstart = () => {
+        setStatus("speaking");
+    };
+    utterance.onend = () => {
+        setStatus("idle");
+    };
+    utterance.onerror = (e) => {
+        console.error("Speech synthesis error", e);
+        setStatus("idle");
+        toast({
+            title: "Voice Error",
+            description: e.error || "Could not play audio. Your browser might not support this voice.",
+            variant: "destructive"
+        });
+    };
+
+    window.speechSynthesis.speak(utterance);
+  };
 
   const stopSpeaking = useCallback(() => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.src = "";
-    }
-    if (status === 'speaking') {
-      setStatus("idle");
+    if (typeof window !== 'undefined' && window.speechSynthesis.speaking) {
+      window.speechSynthesis.cancel();
+      if (status === 'speaking') {
+          setStatus("idle");
+      }
     }
   }, [status]);
 
+
   const stopListening = useCallback(() => {
     if (recognitionRef.current && status === "listening") {
-      recognitionRef.current.stop();
+        try {
+            recognitionRef.current.stop();
+        } catch (e) {
+            // Can throw if not active, which is fine
+        }
     }
   }, [status]);
   
@@ -58,14 +92,13 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
       setStatus("thinking");
   
       const userMessage: Message = { role: 'user', content: transcript };
-      // Use a functional update to get the latest chat history
       setChatHistory(prev => [...prev, userMessage]);
   
       try {
         const questionResult = await askQuestion({
           reportSummary,
           question: transcript,
-          chatHistory: [...chatHistory, userMessage], // Pass the most up-to-date history
+          chatHistory: [...chatHistory, userMessage],
         });
         const botMessage: Message = { role: "bot", content: questionResult.answer };
         setChatHistory(prev => [...prev, botMessage]);
@@ -76,15 +109,7 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
             return;
         }
   
-        setStatus("speaking");
-        const ttsResult = await textToSpeech({ text: botMessage.content });
-  
-        if (ttsResult.audioDataUri && audioRef.current) {
-          audioRef.current.src = ttsResult.audioDataUri;
-          await audioRef.current.play();
-        } else {
-          setStatus("idle");
-        }
+        speakText(botMessage.content);
   
       } catch (error) {
         console.error("Error during processing/responding:", error);
@@ -99,16 +124,14 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
     if (isProcessingRef.current || (recognitionRef.current && status === "listening")) {
       return;
     }
+    stopSpeaking();
     try {
       transcriptRef.current = "";
       recognitionRef.current?.start();
-      setStatus("listening");
     } catch (e) {
       // Already started, it's fine.
     }
-  }, [status]);
-
-  // --- Effects for Setup and State Transitions ---
+  }, [status, stopSpeaking]);
 
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -124,17 +147,43 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
 
     const recognition = new SpeechRecognition();
     recognitionRef.current = recognition;
-    recognition.continuous = false;
-    recognition.interimResults = false;
+    recognition.continuous = true;
+    recognition.interimResults = true;
+
+    recognition.onstart = () => {
+        setStatus("listening");
+    };
 
     recognition.onresult = (event) => {
-      transcriptRef.current = event.results[event.results.length - 1][0].transcript;
+        if(silenceTimerRef.current) {
+            clearTimeout(silenceTimerRef.current);
+        }
+        
+        let interimTranscript = '';
+        let finalTranscript = '';
+
+        for (let i = 0; i < event.results.length; ++i) {
+            if (event.results[i].isFinal) {
+                finalTranscript += event.results[i][0].transcript;
+            } else {
+                interimTranscript += event.results[i][0].transcript;
+            }
+        }
+        transcriptRef.current = finalTranscript || interimTranscript;
+
+        silenceTimerRef.current = setTimeout(() => {
+           stopListening();
+        }, 1000); // 1 second of silence
     };
     
     recognition.onend = () => {
       if (status === 'listening' && !isProcessingRef.current) {
          const finalTranscript = transcriptRef.current.trim();
-         processAndRespond(finalTranscript);
+         if (finalTranscript) {
+            processAndRespond(finalTranscript);
+         } else {
+            setStatus('idle');
+         }
       }
     };
     
@@ -143,32 +192,29 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
         console.error("Speech recognition error:", event.error);
         toast({ title: "Speech Error", description: event.error, variant: 'destructive' });
       }
-      setStatus("idle");
+       if (status === "listening") {
+            setStatus("idle");
+       }
     };
     
-    const audio = new Audio();
-    audioRef.current = audio;
-    audio.onended = () => setStatus("idle");
-
     return () => {
-      recognition.stop();
-      audio.pause();
+        stopListening();
+        stopSpeaking();
+        if(silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Effect to automatically start listening when idle
   useEffect(() => {
-    if (status === "idle") {
+    if (status === "idle" && status !== 'muted') {
       const timer = setTimeout(() => startListening(), 100);
       return () => clearTimeout(timer);
     }
   }, [status, startListening]);
 
-  // --- User Actions ---
   const handleMuteToggle = () => {
     if (status === "muted") {
-      setStatus("idle"); // Unmute and go to idle to restart cycle
+      setStatus("idle");
     } else {
       stopSpeaking();
       stopListening();
@@ -181,8 +227,13 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
     stopSpeaking();
     onClose();
   }
+
+  const handleStopListening = () => {
+    if (status === 'listening') {
+      stopListening();
+    }
+  }
   
-  // --- UI ---
   const statusText: Record<Status, string> = {
       idle: "Listening...",
       listening: "Listening...",
@@ -226,7 +277,7 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
           </button>
           
           <button
-            onClick={stopListening}
+            onClick={handleStopListening}
             disabled={status !== 'listening'}
             className={cn(
                 "w-20 h-20 rounded-full flex items-center justify-center bg-white text-black hover:bg-white/90 transition-all duration-300 disabled:bg-gray-400 disabled:scale-90",

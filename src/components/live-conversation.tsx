@@ -62,13 +62,14 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
   }, [toast]);
 
   const processAndRespond = useCallback(async (transcript: string) => {
-      if (!transcript) {
+      if (!transcript.trim()) {
         setStatus("idle");
         return;
       }
   
       setStatus("thinking");
       const userMessage: Message = { role: 'user', content: transcript };
+      // Use a functional update to get the latest chat history
       const updatedHistory = [...chatHistory, userMessage];
       setChatHistory(updatedHistory);
   
@@ -90,6 +91,7 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
       } catch (error) {
         console.error("Error processing AI response:", error);
         setStatus("error");
+        setChatHistory(prev => prev.filter(m => m.role !== 'user' || m.content !== transcript)); // remove optimistic user message
         toast({
           title: "AI Error",
           description: "Could not get a response. Please try again.",
@@ -97,19 +99,15 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
         });
       }
     }, [chatHistory, reportSummary, speakText, toast]);
-
-  const stopListening = useCallback(() => {
-    if (recognitionRef.current) {
+  
+  // This is a new centralized function to stop listening and trigger processing
+  const stopAndProcess = useCallback(() => {
+    if (recognitionRef.current && status === 'listening') {
         recognitionRef.current.stop();
+        // The onend event will handle calling processAndRespond
     }
-  }, []);
+  }, [status]);
 
-  const handleManualStop = () => {
-    if (status === 'listening') {
-      stopListening();
-      processAndRespond(finalTranscriptRef.current);
-    }
-  }
 
   const startListening = useCallback(() => {
     if (status !== 'idle' && status !== 'muted' && status !== 'error') {
@@ -145,6 +143,7 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
         };
         
         recognition.onend = () => {
+            // Only process if we were actively listening. This prevents processing on mute/close.
             if (status === 'listening') {
                 processAndRespond(finalTranscriptRef.current);
             }
@@ -152,12 +151,9 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
 
         recognition.onresult = (event) => {
           let interimTranscript = '';
-          for (let i = event.resultIndex; i < event.results.length; ++i) {
-            if (event.results[i].isFinal) {
-              finalTranscriptRef.current += event.results[i][0].transcript;
-            } else {
-              interimTranscript += event.results[i][0].transcript;
-            }
+          finalTranscriptRef.current = '';
+          for (let i = 0; i < event.results.length; ++i) {
+             finalTranscriptRef.current += event.results[i][0].transcript;
           }
         };
     }
@@ -165,7 +161,7 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
     try {
       recognitionRef.current.start();
     } catch(e) {
-      // Already started, ignore
+       // This can happen if recognition is already active, which is fine.
     }
   }, [status, processAndRespond, onClose, toast]);
   
@@ -178,19 +174,33 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
 
   const handleMuteToggle = () => {
     if (status === "muted") {
-      setStatus("idle");
+      setStatus("idle"); // This will trigger the useEffect to start listening
     } else {
+      // If listening, stop and process the captured audio
       if (status === 'listening') {
-        stopListening();
-        processAndRespond(finalTranscriptRef.current);
+          stopAndProcess();
       }
-      window.speechSynthesis.cancel();
+      // If speaking, just cancel speech
+      if(status === 'speaking'){
+          window.speechSynthesis.cancel();
+      }
       setStatus("muted");
     }
   };
+
+  const handleManualStop = () => {
+    if (status === 'listening') {
+      stopAndProcess();
+    } else if (status === 'idle' || status === 'muted' || status === 'error') {
+      startListening();
+    }
+  }
   
   const handleClose = () => {
-    stopListening();
+    if (recognitionRef.current) {
+        recognitionRef.current.onend = null; // prevent onend from firing after close
+        recognitionRef.current.stop();
+    }
     window.speechSynthesis.cancel();
     onClose();
   }
@@ -267,7 +277,7 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
           
           <button
             onClick={handleManualStop}
-            disabled={status === 'thinking' || status === 'speaking' || status === 'muted'}
+            disabled={status === 'thinking' || status === 'speaking'}
             aria-label={status === 'listening' ? 'Stop Listening' : 'Start Listening'}
             className={cn(
                 "w-20 h-20 rounded-full flex items-center justify-center bg-white text-black hover:bg-white/90 transition-all duration-300 disabled:bg-gray-400 disabled:scale-90",

@@ -1,17 +1,85 @@
 
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useReducer } from "react";
 import { X, Mic, MicOff, Square } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { askQuestion } from "@/ai/flows/enable-interactive-q-and-a";
 import { textToSpeech } from "@/ai/flows/text-to-speech";
 
-type ConversationStatus = "idle" | "listening" | "thinking" | "speaking";
+// --- State Machine ---
+
+type State = {
+  status: "idle" | "listening" | "thinking" | "speaking" | "muted";
+  chatHistory: Message[];
+};
+
+type Action =
+  | { type: "START_LISTENING" }
+  | { type: "STOP_LISTENING" }
+  | { type: "START_THINKING"; userMessage: Message }
+  | { type: "BOT_RESPONSE"; botMessage: Message }
+  | { type: "START_SPEAKING" }
+  | { type: "FINISH_SPEAKING" }
+  | { type: "MUTE" }
+  | { type: "UNMUTE" }
+  | { type: "ERROR" };
+
+const initialState: State = {
+  status: "idle",
+  chatHistory: [],
+};
+
+function reducer(state: State, action: Action): State {
+  switch (action.type) {
+    case "START_LISTENING":
+      if (state.status === "idle" || state.status === "speaking") {
+        return { ...state, status: "listening" };
+      }
+      return state;
+    case "STOP_LISTENING":
+      if (state.status === "listening") {
+        return { ...state, status: "idle" };
+      }
+      return state;
+    case "START_THINKING":
+      return {
+        ...state,
+        status: "thinking",
+        chatHistory: [...state.chatHistory, action.userMessage],
+      };
+    case "BOT_RESPONSE":
+       return {
+        ...state,
+        chatHistory: [...state.chatHistory, action.botMessage],
+      };
+    case "START_SPEAKING":
+       if (state.status === 'thinking' || state.status === 'muted') {
+         return {...state, status: state.status === 'muted' ? 'muted' : 'speaking'};
+       }
+       return state;
+    case "FINISH_SPEAKING":
+      if (state.status === "speaking") {
+        return { ...state, status: "idle" };
+      }
+      return state;
+    case "MUTE":
+      return { ...state, status: "muted" };
+    case "UNMUTE":
+      return { ...state, status: "idle" };
+    case "ERROR":
+      return { ...state, status: "idle" };
+    default:
+      return state;
+  }
+}
+
+
+// --- Component ---
 
 type Message = {
-  role: 'user' | 'bot';
+  role: "user" | "bot";
   content: string;
 };
 
@@ -21,61 +89,82 @@ interface LiveConversationProps {
 }
 
 export function LiveConversation({ reportSummary, onClose }: LiveConversationProps) {
-  const [status, setStatus] = useState<ConversationStatus>("idle");
-  const [chatHistory, setChatHistory] = useState<Message[]>([]);
-  const [isMuted, setIsMuted] = useState(false);
+  const [state, dispatch] = useReducer(reducer, initialState);
   const { toast } = useToast();
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const finalTranscriptRef = useRef("");
+
+  // --- Core Actions ---
 
   const stopSpeaking = useCallback(() => {
     if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current.src = "";
+      audioRef.current.pause();
+      audioRef.current.src = "";
     }
-    if (status === 'speaking') {
-        setStatus('idle');
+    if (state.status === "speaking") {
+      dispatch({ type: "FINISH_SPEAKING" });
     }
-  }, [status]);
-  
+  }, [state.status]);
+
+  const startListening = useCallback(() => {
+    if (recognitionRef.current && state.status !== "listening") {
+      finalTranscriptRef.current = "";
+      dispatch({ type: "START_LISTENING" });
+      try {
+        recognitionRef.current.start();
+      } catch (e) {
+        // Already started, which is fine
+      }
+    }
+  }, [state.status]);
+
+  const stopListening = useCallback(() => {
+    if (recognitionRef.current && state.status === "listening") {
+        try {
+            recognitionRef.current.stop();
+        } catch (e) {
+            // Already stopped
+        }
+    }
+  }, [state.status]);
+
   const processAndRespond = useCallback(async (transcript: string) => {
     if (!transcript.trim()) {
-      setStatus("idle");
+      dispatch({ type: "ERROR" });
       return;
     }
 
-    setStatus("thinking");
-
     const userMessage: Message = { role: "user", content: transcript };
-    const currentHistory = [...chatHistory, userMessage];
-    setChatHistory(currentHistory);
+    dispatch({ type: "START_THINKING", userMessage });
 
     try {
       const questionResult = await askQuestion({
         reportSummary,
         question: transcript,
-        chatHistory: currentHistory.slice(0, -1),
+        chatHistory: state.chatHistory,
       });
 
       const botMessage: Message = { role: "bot", content: questionResult.answer };
-      setChatHistory(prev => [...prev, botMessage]);
-
-      if (isMuted) {
-          setStatus("idle");
-          return;
+      dispatch({ type: "BOT_RESPONSE", botMessage });
+      
+      if (state.status === 'muted') {
+         dispatch({ type: "START_SPEAKING" }); // Will keep state as muted
+         return;
       }
       
       const ttsResult = await textToSpeech({ text: questionResult.answer });
+      dispatch({ type: "START_SPEAKING" });
+
       if (audioRef.current && ttsResult.audioDataUri) {
-        setStatus("speaking");
         audioRef.current.src = ttsResult.audioDataUri;
         audioRef.current.play().catch(e => {
              console.error("Audio playback failed:", e);
-             setStatus("idle");
+             dispatch({ type: "ERROR" });
         });
       } else {
-        setStatus("idle");
+        dispatch({ type: "ERROR" });
       }
     } catch (error) {
       console.error("AI interaction failed:", error);
@@ -84,16 +173,12 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
         description: "Could not get a response from the AI.",
         variant: "destructive",
       });
-      setStatus("idle");
+      dispatch({ type: "ERROR" });
     }
-  }, [chatHistory, reportSummary, toast, isMuted]);
+  }, [reportSummary, state.chatHistory, toast, state.status]);
 
-  const startListening = useCallback(() => {
-    if (recognitionRef.current && status === 'idle' && !isMuted) {
-        setStatus('listening');
-        recognitionRef.current.start();
-    }
-  }, [status, isMuted]);
+  
+  // --- Effects for Setup and State Transitions ---
 
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -111,29 +196,29 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
     recognitionRef.current.continuous = false;
     recognitionRef.current.interimResults = true;
 
-    let finalTranscript = '';
-
     recognitionRef.current.onresult = (event) => {
-        let interimTranscript = '';
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-            if (event.results[i].isFinal) {
-                finalTranscript += event.results[i][0].transcript;
-            } else {
-                interimTranscript += event.results[i][0].transcript;
-            }
+      let interimTranscript = "";
+      let finalTranscript = "";
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) {
+          finalTranscript += event.results[i][0].transcript;
+        } else {
+          interimTranscript += event.results[i][0].transcript;
         }
-
-        if(interimTranscript.length > 0 && status === 'speaking') {
-            stopSpeaking();
-        }
+      }
+      finalTranscriptRef.current = finalTranscript;
+      
+      // Barge-in: if user speaks while bot is speaking
+      if ((interimTranscript || finalTranscript) && state.status === "speaking") {
+        stopSpeaking();
+      }
     };
     
     recognitionRef.current.onend = () => {
-        if (status === 'listening') {
-            processAndRespond(finalTranscript);
-            finalTranscript = '';
-        } else {
-            setStatus('idle');
+        dispatch({ type: "STOP_LISTENING" });
+        if (finalTranscriptRef.current) {
+            processAndRespond(finalTranscriptRef.current);
+            finalTranscriptRef.current = "";
         }
     };
     
@@ -144,49 +229,58 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
     };
     
     audioRef.current = new Audio();
-    audioRef.current.onended = () => setStatus('idle');
+    audioRef.current.onended = () => dispatch({ type: "FINISH_SPEAKING" });
+
+    // Initial start
+    startListening();
 
     return () => {
-        recognitionRef.current?.abort();
-        if(audioRef.current) {
-            audioRef.current.pause();
-        }
+      recognitionRef.current?.abort();
+      if(audioRef.current) {
+          audioRef.current.pause();
+      }
     }
-  }, [onClose, processAndRespond, status, stopSpeaking, toast]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run on mount
 
+
+  // Effect to automatically start listening when idle
   useEffect(() => {
-    startListening();
-  }, [startListening]);
+    if (state.status === "idle") {
+        startListening();
+    }
+  }, [state.status, startListening])
 
+
+  // --- User Actions ---
   const handleMuteToggle = () => {
-    const nextMuted = !isMuted;
-    setIsMuted(nextMuted);
-    if(nextMuted) {
-        recognitionRef.current?.abort();
-        stopSpeaking();
-        setStatus('idle');
+    if (state.status === "muted") {
+        dispatch({ type: "UNMUTE" });
     } else {
-        setStatus('idle');
+        stopSpeaking();
+        stopListening();
+        dispatch({ type: "MUTE" });
     }
   };
 
   const handleStopListening = () => {
-    if (status === 'listening' && recognitionRef.current) {
-        recognitionRef.current.stop();
-    }
+    stopListening();
   };
 
   const handleClose = () => {
     stopSpeaking();
-    recognitionRef.current?.abort();
+    stopListening();
     onClose();
   }
+  
+  // --- UI ---
 
   const statusText = {
       idle: "Tap the mic to speak",
       listening: "Listening...",
       thinking: "Thinking...",
-      speaking: "Speaking..."
+      speaking: "Speaking...",
+      muted: "Muted"
   }
 
   return (
@@ -197,23 +291,23 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
         <div className="relative flex items-center justify-center w-64 h-64">
             <div className={cn(
                 "absolute rounded-full bg-primary/20 transition-all duration-500",
-                status === 'listening' && 'w-64 h-64 animate-pulse',
-                status === 'speaking' && 'w-56 h-56 animate-pulse',
-                status === 'thinking' && 'w-48 h-48 animate-spin-slow',
-                (status === 'idle' || isMuted) && 'w-48 h-48',
+                state.status === 'listening' && 'w-64 h-64 animate-pulse',
+                state.status === 'speaking' && 'w-56 h-56 animate-pulse',
+                state.status === 'thinking' && 'w-48 h-48 animate-spin-slow',
+                (state.status === 'idle' || state.status === 'muted') && 'w-48 h-48',
             )}></div>
             <div className={cn(
                 "absolute rounded-full bg-primary/40 transition-all duration-500",
-                status === 'listening' && 'w-56 h-56 animate-pulse [animation-delay:100ms]',
-                status === 'speaking' && 'w-48 h-48 animate-pulse [animation-delay:100ms]',
-                status === 'thinking' && 'w-40 h-40 animate-spin-slow [animation-direction:reverse]',
-                (status === 'idle' || isMuted) && 'w-40 h-40',
+                state.status === 'listening' && 'w-56 h-56 animate-pulse [animation-delay:100ms]',
+                state.status === 'speaking' && 'w-48 h-48 animate-pulse [animation-delay:100ms]',
+                state.status === 'thinking' && 'w-40 h-40 animate-spin-slow [animation-direction:reverse]',
+                (state.status === 'idle' || state.status === 'muted') && 'w-40 h-40',
             )}></div>
             <div className="absolute rounded-full w-32 h-32 bg-primary"></div>
         </div>
 
         <p className="mt-8 text-xl text-white/80 h-8 transition-opacity duration-300">
-          {isMuted ? "Muted" : statusText[status]}
+          {statusText[state.status]}
         </p>
         
         {/* Controls */}
@@ -222,15 +316,15 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
             onClick={handleMuteToggle}
             className="w-16 h-16 rounded-full flex items-center justify-center bg-white/10 text-white hover:bg-white/20 transition-colors"
           >
-            {isMuted ? <MicOff size={28} /> : <Mic size={28} />}
+            {state.status === "muted" ? <MicOff size={28} /> : <Mic size={28} />}
           </button>
           
           <button
             onClick={handleStopListening}
-            disabled={status !== 'listening'}
+            disabled={state.status !== 'listening'}
             className={cn(
                 "w-20 h-20 rounded-full flex items-center justify-center bg-white text-black hover:bg-white/90 transition-all scale-100 disabled:scale-0",
-                status === 'listening' ? 'opacity-100' : 'opacity-0'
+                state.status === 'listening' ? 'opacity-100' : 'opacity-0'
             )}
           >
             <Square size={32} />
@@ -247,5 +341,3 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
     </div>
   );
 }
-
-    

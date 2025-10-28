@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { X, Mic, MicOff } from "lucide-react";
+import { X, Mic, MicOff, Square } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { askQuestion } from "@/ai/flows/enable-interactive-q-and-a";
@@ -43,6 +43,13 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
       // It might already be started, which is okay.
     }
   }, [isMuted]);
+  
+  const stopSpeaking = useCallback(() => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+  }, []);
 
   const processAndRespond = useCallback(async (transcript: string) => {
     setStatus("thinking");
@@ -143,6 +150,9 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
     } else {
       setIsMuted(true);
       recognitionRef.current?.stop();
+      if(status === 'speaking'){
+        stopSpeaking();
+      }
       setStatus("idle");
     }
   };

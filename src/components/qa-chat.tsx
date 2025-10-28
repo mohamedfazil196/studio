@@ -115,16 +115,18 @@ export function QAChat({ reportSummary }: QAChatProps) {
     
     handleStopSpeaking();
     
-    const utterance = new SpeechSynthesisUtterance(text);
+    // Remove markdown asterisks for cleaner speech
+    const cleanText = text.replace(/\*\*/g, '');
+    const utterance = new SpeechSynthesisUtterance(cleanText);
     utteranceRef.current = utterance;
     
     utterance.onstart = () => setIsSpeaking(true);
     utterance.onend = () => setIsSpeaking(false);
-    utterance.onerror = () => {
+    utterance.onerror = (e) => {
         setIsSpeaking(false);
         toast({
             title: "Voice Error",
-            description: "Could not play the audio.",
+            description: e.error || "Could not play the audio.",
             variant: "destructive"
         });
     };

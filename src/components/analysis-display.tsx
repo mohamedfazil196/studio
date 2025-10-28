@@ -7,7 +7,6 @@ import { type Analysis } from "@/app/types/analysis";
 import { Button } from "./ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { useState, useRef, useEffect, useCallback } from "react";
-import { translateAndSpeak } from "@/ai/flows/translate-and-speak";
 import { useToast } from "@/hooks/use-toast";
 import { ScrollArea } from "./ui/scroll-area";
 import Link from 'next/link';
@@ -74,7 +73,9 @@ export function AnalysisDisplay({ fileName, analysis }: AnalysisDisplayProps) {
     
     handleStopSpeaking();
     
-    const utterance = new SpeechSynthesisUtterance(text);
+    // Remove markdown for cleaner speech
+    const cleanText = text.replace(/\*\*/g, '');
+    const utterance = new SpeechSynthesisUtterance(cleanText);
     utteranceRef.current = utterance;
     utterance.lang = lang;
     
@@ -85,7 +86,7 @@ export function AnalysisDisplay({ fileName, analysis }: AnalysisDisplayProps) {
       setIsPlaying(false);
       toast({
         title: "Voice Error",
-        description: "Could not play audio. Your browser might not support this language.",
+        description: e.error || "Could not play audio. Your browser might not support this language.",
         variant: "destructive"
       });
     };

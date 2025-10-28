@@ -37,7 +37,6 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
   const { toast } = useToast();
   
   const recognitionRef = useRef<SpeechRecognition | null>(null);
-  const finalTranscriptRef = useRef<string>('');
   const isProcessingRef = useRef<boolean>(false);
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
 
@@ -68,64 +67,65 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
   }, [toast]);
   
   const stopListening = useCallback(() => {
-    if (recognitionRef.current && (status === 'listening' || status === 'speaking')) {
+    if (recognitionRef.current) {
       recognitionRef.current.stop();
     }
     if (window.speechSynthesis.speaking) {
       window.speechSynthesis.cancel();
     }
-  }, [status]);
+  }, []);
+
+  const processAndRespond = useCallback(async (transcript: string) => {
+    if (!transcript.trim() || isProcessingRef.current) {
+      return;
+    }
+    
+    isProcessingRef.current = true;
+    setStatus("thinking");
+    
+    const userMessage: Message = { role: 'user', content: transcript };
+    const currentChatHistoryWithUser = [...chatHistory, userMessage];
+    setChatHistory(currentChatHistoryWithUser);
+
+    try {
+      const result = await askQuestion({
+        reportSummary,
+        question: transcript,
+        chatHistory: currentChatHistoryWithUser.map(m => ({ role: m.role, content: m.content })),
+      });
+
+      if (!result || !result.answer) {
+           throw new Error("AI did not return an answer.");
+      }
+
+      const botMessage: Message = { role: "bot", content: result.answer };
+      setChatHistory(prev => [...prev, botMessage]);
+      speakText(result.answer);
+
+    } catch (error) {
+      console.error("Error processing AI response:", error);
+      setStatus("error");
+      const botMessage: Message = { role: "bot", content: "I'm sorry, I ran into an error. Please try again." };
+      setChatHistory(prev => [...prev, botMessage]);
+      speakText(botMessage.content);
+    } finally {
+      isProcessingRef.current = false;
+      setTranscriptToProcess(''); // Clear the transcript after processing
+    }
+  }, [chatHistory, reportSummary, speakText]);
   
   // This effect runs when a transcript is ready to be processed
   useEffect(() => {
-    const process = async () => {
-      if (!transcriptToProcess.trim() || isProcessingRef.current) {
-        return;
-      }
-      
-      isProcessingRef.current = true;
-      setStatus("thinking");
-      
-      const userMessage: Message = { role: 'user', content: transcriptToProcess };
-      const currentChatHistory = [...chatHistory, userMessage];
-      setChatHistory(currentChatHistory);
-  
-      try {
-        const result = await askQuestion({
-          reportSummary,
-          question: transcriptToProcess,
-          chatHistory: currentChatHistory.map(m => ({ role: m.role, content: m.content })),
-        });
-
-        if (!result || !result.answer) {
-             throw new Error("AI did not return an answer.");
-        }
-
-        const botMessage: Message = { role: "bot", content: result.answer };
-        setChatHistory(prev => [...prev, botMessage]);
-        speakText(result.answer);
-
-      } catch (error) {
-        console.error("Error processing AI response:", error);
-        setStatus("error");
-        const botMessage: Message = { role: "bot", content: "I'm sorry, I ran into an error. Please try again." };
-        setChatHistory(prev => [...prev, botMessage]);
-        speakText(botMessage.content);
-      } finally {
-        isProcessingRef.current = false;
-        setTranscriptToProcess(''); // Clear the transcript after processing
-      }
-    };
-    
-    process();
-  }, [transcriptToProcess, chatHistory, reportSummary, speakText]);
+    if (transcriptToProcess) {
+      processAndRespond(transcriptToProcess);
+    }
+  }, [transcriptToProcess, processAndRespond]);
 
 
   const startListening = useCallback(() => {
     if (status === 'listening' || isProcessingRef.current) return;
     
     stopListening();
-    finalTranscriptRef.current = '';
 
     if (recognitionRef.current) {
       try {
@@ -140,6 +140,7 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
   }, [status, stopListening]);
 
   useEffect(() => {
+    if(typeof window !== 'undefined'){
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!SpeechRecognition) {
           toast({
@@ -170,16 +171,14 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
         for (let i = 0; i < event.results.length; ++i) {
           final += event.results[i][0].transcript;
         }
-        finalTranscriptRef.current = final.trim();
+        if (final.trim()) {
+           setTranscriptToProcess(final.trim());
+        }
       };
       
       recognition.onend = () => {
         if (status === 'listening' && !isProcessingRef.current) {
-          if (finalTranscriptRef.current) {
-             setTranscriptToProcess(finalTranscriptRef.current);
-          } else {
-             setStatus('idle');
-          }
+           setStatus('idle');
         }
       };
 
@@ -194,6 +193,7 @@ export function LiveConversation({ reportSummary, onClose }: LiveConversationPro
             window.speechSynthesis.cancel();
           }
       }
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

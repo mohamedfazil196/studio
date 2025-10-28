@@ -1,8 +1,7 @@
-
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Bot, User, Send, Loader2, Headset, Square } from 'lucide-react';
+import { Bot, User, Send, Loader2, Square } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -12,7 +11,6 @@ import { useToast } from '@/hooks/use-toast';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { LiveConversation } from './live-conversation';
 
 type Message = {
   role: 'user' | 'bot';
@@ -79,7 +77,6 @@ export function QAChat({ reportSummary }: QAChatProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [isVoiceOutputEnabled, setIsVoiceOutputEnabled] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const [isLiveConversationOpen, setIsLiveConversationOpen] = useState(false);
   const { toast } = useToast();
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   
@@ -194,14 +191,10 @@ export function QAChat({ reportSummary }: QAChatProps) {
         <CardHeader>
           <div className="flex justify-between items-start">
             <div>
-              <CardTitle className="font-headline text-xl text-primary flex items-center gap-2"><Bot />Interactive Q&A</CardTitle>
+              <CardTitle className="font-headline text-xl text-primary flex items-center gap-2"><Bot />Interactive Q&amp;A</CardTitle>
               <CardDescription>Ask questions about the report summary or general medical topics.</CardDescription>
             </div>
             <div className='flex items-center gap-4'>
-                <Button variant="outline" size="sm" onClick={() => setIsLiveConversationOpen(true)}>
-                    <Headset className="mr-2 h-4 w-4" />
-                    Live Conversation
-                </Button>
                 <div className="flex items-center space-x-2">
                     <Switch id="voice-output-mode" checked={isVoiceOutputEnabled} onCheckedChange={handleToggleVoiceOutput} />
                     <Label htmlFor="voice-output-mode">Voice Answers</Label>
@@ -283,12 +276,6 @@ export function QAChat({ reportSummary }: QAChatProps) {
           </form>
         </CardFooter>
       </Card>
-      {isLiveConversationOpen && (
-        <LiveConversation
-          reportSummary={reportSummary}
-          onClose={() => setIsLiveConversationOpen(false)}
-        />
-      )}
     </>
   );
 }

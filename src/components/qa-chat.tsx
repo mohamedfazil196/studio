@@ -148,7 +148,7 @@ export function QAChat({ reportSummary }: QAChatProps) {
     
     handleStopSpeaking();
     
-    const cleanText = text.replace(/\*\*/g, '');
+    const cleanText = text.replace(/\*/g, '').replace(/Disclaimer:.*$/s, '');
     const utterance = new SpeechSynthesisUtterance(cleanText);
     utteranceRef.current = utterance;
     
@@ -341,5 +341,3 @@ export function QAChat({ reportSummary }: QAChatProps) {
     </>
   );
 }
-
-    

@@ -76,63 +76,68 @@ export function AnalysisDisplay({ fileName, analysis }: AnalysisDisplayProps) {
     }
     setIsPlaying(false);
   }, []);
+  
+  const speakWithBrowser = (text: string) => {
+    if (typeof window === 'undefined' || !window.speechSynthesis) {
+        toast({
+            title: "Voice Not Supported",
+            description: "Your browser does not support voice synthesis.",
+            variant: "destructive"
+        });
+        return;
+    }
+    const utterance = new SpeechSynthesisUtterance(text);
+    utteranceRef.current = utterance;
+    utterance.onstart = () => setIsPlaying(true);
+    utterance.onend = () => setIsPlaying(false);
+    utterance.onerror = (e) => {
+        setIsPlaying(false);
+        toast({
+            title: "Voice Error",
+            description: "Could not play the audio.",
+            variant: "destructive"
+        });
+    };
+    window.speechSynthesis.speak(utterance);
+  }
 
-  const speakText = async (text: string, lang: string) => {
+  const speakText = async (textToSpeak: string, lang: string) => {
     handleStopSpeaking();
     setIsPreparingAudio(true);
     
     try {
         if (lang === 'en') {
-            // Use browser's native TTS for English (unlimited)
-            if (typeof window === 'undefined' || !window.speechSynthesis) {
-                throw new Error("Speech synthesis is not supported in your browser.");
-            }
-            const utterance = new SpeechSynthesisUtterance(text);
-            utteranceRef.current = utterance;
-            utterance.onstart = () => setIsPlaying(true);
-            utterance.onend = () => setIsPlaying(false);
-            utterance.onerror = (e) => {
-                setIsPlaying(false);
+            speakWithBrowser(textToSpeak);
+        } else {
+            // For other languages, try AI TTS first, with browser as fallback.
+            try {
+                const result = await translateAndSpeak({ text: analysis.patientSummary, targetLanguage: lang });
+                setTranslatedSummary(result.translatedText);
+    
+                if (audioRef.current) {
+                    audioRef.current.src = result.audioDataUri;
+                    audioRef.current.play();
+                } else {
+                    throw new Error("Audio player not ready.");
+                }
+            } catch (aiError: any) {
+                console.error("AI speech error, falling back to browser TTS:", aiError);
                 toast({
-                    title: "Voice Error",
-                    description: "Could not play the audio.",
+                    title: "AI Voice Failed",
+                    description: "Using browser voice as a fallback. It may not be as accurate.",
                     variant: "destructive"
                 });
-            };
-            window.speechSynthesis.speak(utterance);
-        } else {
-            // Use AI TTS for other languages
-            const result = await translateAndSpeak({ text: analysis.patientSummary, targetLanguage: lang });
-            const audioDataUri = result.audioDataUri;
-            
-            setTranslatedSummary(result.translatedText);
-
-            if (audioDataUri && audioRef.current) {
-                audioRef.current.src = audioDataUri;
-                audioRef.current.play();
-            } else {
-                throw new Error("AI voice generation failed. The service may be temporarily unavailable.");
+                // Fallback to browser TTS with the already translated text
+                speakWithBrowser(textToSpeak);
             }
         }
     } catch (error: any) {
-        console.error("AI speech error:", error);
-        
-        // Handle the specific case where translation succeeded but TTS failed
-        if (error.message.includes('translation succeeded')) {
-            const translatedText = error.message.split(': ')[1];
-            setTranslatedSummary(translatedText);
-             toast({
-              title: "Voice Generation Failed",
-              description: "Could not generate audio, but translation was successful.",
-              variant: "destructive"
-            });
-        } else {
-            toast({
-              title: "Voice Generation Failed",
-              description: error.message || "Could not generate audio. Please try again in a moment.",
-              variant: "destructive"
-            });
-        }
+        console.error("General speech error:", error);
+        toast({
+          title: "Voice Generation Failed",
+          description: error.message || "An unexpected error occurred.",
+          variant: "destructive"
+        });
         setIsPlaying(false);
     } finally {
         setIsPreparingAudio(false);

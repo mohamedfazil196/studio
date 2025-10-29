@@ -1,5 +1,5 @@
 
-import { FileText, Stethoscope, HeartPulse, MessagesSquare, File as FileIcon, AlertTriangle, ShieldCheck, ShieldAlert, Pill, Languages, Play, Pause, BellRing, Loader2, Square } from "lucide-react";
+import { FileText, Stethoscope, HeartPulse, MessagesSquare, File as FileIcon, AlertTriangle, ShieldCheck, ShieldAlert, Pill, Languages, Play, Pause, BellRing, Loader2, Square, Download } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -14,6 +14,9 @@ import { QAChat } from "./qa-chat";
 import { translateText } from "@/ai/flows/translate-text";
 import { translateAndSpeak } from "@/ai/flows/translate-and-speak";
 import { textToSpeech } from "@/ai/flows/text-to-speech";
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
+import { PDFDocument } from './pdf-document';
 
 type AnalysisDisplayProps = {
   fileName: string;
@@ -62,6 +65,7 @@ export function AnalysisDisplay({ fileName, analysis }: AnalysisDisplayProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isPreparingAudio, setIsPreparingAudio] = useState(false);
   const { toast } = useToast();
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
@@ -109,8 +113,7 @@ export function AnalysisDisplay({ fileName, analysis }: AnalysisDisplayProps) {
         if (lang === 'en') {
             speakWithBrowser(textToSpeak);
         } else {
-            // For other languages, try AI TTS first, with browser as fallback.
-            try {
+             try {
                 const result = await translateAndSpeak({ text: analysis.patientSummary, targetLanguage: lang });
                 setTranslatedSummary(result.translatedText);
     
@@ -123,10 +126,11 @@ export function AnalysisDisplay({ fileName, analysis }: AnalysisDisplayProps) {
             } catch (aiError: any) {
                 console.error("AI speech error, falling back to browser TTS:", aiError);
                 toast({
-                    title: "AI Voice Failed",
-                    description: "Using browser voice as a fallback. It may not be as accurate.",
+                    title: "AI Voice Unavailable",
+                    description: "Using standard browser voice as a fallback.",
                     variant: "destructive"
                 });
+                
                 // Fallback to browser TTS with the already translated text
                 speakWithBrowser(textToSpeak);
             }
@@ -179,8 +183,56 @@ export function AnalysisDisplay({ fileName, analysis }: AnalysisDisplayProps) {
     }
   };
 
+  const handleDownloadPdf = async () => {
+    setIsGeneratingPdf(true);
+    const pdfContainer = document.getElementById('pdf-container');
+    if (pdfContainer) {
+        try {
+            const canvas = await html2canvas(pdfContainer, {
+                scale: 2, // Higher scale for better quality
+                useCORS: true,
+                logging: false,
+            });
+            const imgData = canvas.toDataURL('image/png');
+            
+            const pdf = new jsPDF('p', 'mm', 'a4');
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfHeight = pdf.internal.pageSize.getHeight();
+            const canvasWidth = canvas.width;
+            const canvasHeight = canvas.height;
+            const ratio = canvasWidth / canvasHeight;
+            const widthInPdf = pdfWidth - 20; // with margin
+            const heightInPdf = widthInPdf / ratio;
+            
+            let heightLeft = heightInPdf;
+            let position = 10; // top margin
+
+            pdf.addImage(imgData, 'PNG', 10, position, widthInPdf, heightInPdf);
+            heightLeft -= (pdfHeight - 20);
+
+            while (heightLeft > 0) {
+                position = -heightLeft -10;
+                pdf.addPage();
+                pdf.addImage(imgData, 'PNG', 10, position, widthInPdf, heightInPdf);
+                heightLeft -= (pdfHeight - 20);
+            }
+            
+            pdf.save(`${fileName.replace(/\.[^/.]+$/, "")}-analysis.pdf`);
+
+        } catch (error) {
+            console.error("Failed to generate PDF:", error);
+            toast({
+                title: "PDF Generation Failed",
+                description: "Could not create the PDF file. Please try again.",
+                variant: "destructive",
+            });
+        } finally {
+            setIsGeneratingPdf(false);
+        }
+    }
+  };
+
   useEffect(() => {
-    // Setup audio element and its listeners
     const audio = new Audio();
     audioRef.current = audio;
     
@@ -192,7 +244,6 @@ export function AnalysisDisplay({ fileName, analysis }: AnalysisDisplayProps) {
     audio.addEventListener('pause', onPause);
     audio.addEventListener('ended', onEnded);
     
-    // Cleanup on component unmount
     return () => {
       handleStopSpeaking();
       if (audio) {
@@ -222,13 +273,24 @@ export function AnalysisDisplay({ fileName, analysis }: AnalysisDisplayProps) {
 
   return (
     <div className="w-full max-w-7xl mx-auto animate-fade-in space-y-6">
+      {/* Hidden container for PDF generation */}
+      <div className="absolute left-[-9999px] top-[-9999px] w-[210mm]">
+          <PDFDocument id="pdf-container" fileName={fileName} analysis={analysis} />
+      </div>
+
       <header className="mb-6 px-1 space-y-3">
-        <div className="flex items-center gap-3">
-          <FileIcon className="w-8 h-8 text-primary" />
-          <div>
-            <p className="text-sm text-muted-foreground">Analysis for</p>
-            <h2 className="text-2xl font-bold font-headline text-foreground">{fileName}</h2>
-          </div>
+        <div className="flex flex-col sm:flex-row justify-between sm:items-start gap-4">
+            <div className="flex items-center gap-3">
+                <FileIcon className="w-8 h-8 text-primary" />
+                <div>
+                    <p className="text-sm text-muted-foreground">Analysis for</p>
+                    <h2 className="text-2xl font-bold font-headline text-foreground">{fileName}</h2>
+                </div>
+            </div>
+            <Button onClick={handleDownloadPdf} disabled={isGeneratingPdf}>
+                {isGeneratingPdf ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+                {isGeneratingPdf ? 'Generating...' : 'Download PDF'}
+            </Button>
         </div>
         <div className="flex items-center gap-2">
             <Badge variant="outline" className={cn("flex items-center gap-2 text-base px-3 py-1", config.color)}>

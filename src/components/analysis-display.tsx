@@ -13,7 +13,6 @@ import Link from 'next/link';
 import { QAChat } from "./qa-chat";
 import { translateText } from "@/ai/flows/translate-text";
 import { translateAndSpeak } from "@/ai/flows/translate-and-speak";
-import { textToSpeech } from "@/ai/flows/text-to-speech";
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { PDFDocument } from './pdf-document';
@@ -114,8 +113,12 @@ export function AnalysisDisplay({ fileName, analysis }: AnalysisDisplayProps) {
             speakWithBrowser(textToSpeak);
         } else {
              try {
+                // Get translated text first to use for fallback
+                const translationResult = await translateText({ text: analysis.patientSummary, targetLanguage: lang });
+                const translatedText = translationResult.translatedText;
+                setTranslatedSummary(translatedText);
+                
                 const result = await translateAndSpeak({ text: analysis.patientSummary, targetLanguage: lang });
-                setTranslatedSummary(result.translatedText);
     
                 if (audioRef.current) {
                     audioRef.current.src = result.audioDataUri;
@@ -132,7 +135,7 @@ export function AnalysisDisplay({ fileName, analysis }: AnalysisDisplayProps) {
                 });
                 
                 // Fallback to browser TTS with the already translated text
-                speakWithBrowser(textToSpeak);
+                speakWithBrowser(translatedSummary);
             }
         }
     } catch (error: any) {
@@ -289,7 +292,7 @@ export function AnalysisDisplay({ fileName, analysis }: AnalysisDisplayProps) {
             </div>
             <Button onClick={handleDownloadPdf} disabled={isGeneratingPdf}>
                 {isGeneratingPdf ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
-                {isGeneratingPdf ? 'Generating...' : 'Download PDF'}
+                {isGeneratingPdf ? 'Generating...' : 'Download Report'}
             </Button>
         </div>
         <div className="flex items-center gap-2">

@@ -12,5 +12,6 @@ import '@/ai/flows/recommend-medicines.ts';
 import '@/ai/flows/get-health-tip.ts';
 import '@/ai/flows/translate-text.ts';
 import '@/ai/flows/translate-and-speak.ts';
+import '@/ai/flows/diagnose-eye-illness.ts';
 
     

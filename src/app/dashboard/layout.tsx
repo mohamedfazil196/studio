@@ -4,7 +4,7 @@
 import { useFirebase, useCollection, useMemoFirebase } from "@/firebase";
 import { Sidebar, SidebarProvider, SidebarInset, SidebarMenuButton } from "@/components/ui/sidebar";
 import { SidebarHeader, SidebarTrigger, SidebarMenu, SidebarMenuItem, SidebarContent, SidebarFooter } from "@/components/ui/sidebar";
-import { LayoutDashboard, FileUp, MessagesSquare, BellRing, Settings, LogOut, FileHeart, HeartPulse, Loader2, Sparkles } from "lucide-react";
+import { LayoutDashboard, FileUp, MessagesSquare, BellRing, Settings, LogOut, FileHeart, HeartPulse, Loader2, Sparkles, Eye } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { Auth, signOut }from "firebase/auth";
@@ -192,6 +192,12 @@ export default function DashboardLayout({
                     <SidebarMenuButton href="/dashboard/analysis" isActive={pathname === '/dashboard/analysis'} tooltip="Analysis" onClick={(e) => handleNavigationClick(e, '/dashboard/analysis')}>
                         <FileUp />
                         <span>Analysis</span>
+                    </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                    <SidebarMenuButton href="/dashboard/eye-analyzer" isActive={pathname === '/dashboard/eye-analyzer'} tooltip="Eye Analyzer" onClick={(e) => handleNavigationClick(e, '/dashboard/eye-analyzer')}>
+                        <Eye />
+                        <span>Eye Analyzer</span>
                     </SidebarMenuButton>
                 </SidebarMenuItem>
                 <SidebarMenuItem>

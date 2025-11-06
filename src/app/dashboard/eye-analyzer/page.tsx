@@ -13,6 +13,7 @@ import Image from 'next/image';
 import { diagnoseEyeIllness, type DiagnoseEyeIllnessOutput } from '@/ai/flows/diagnose-eye-illness';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
+import { QAChat } from '@/components/qa-chat';
 
 const SeverityConfig = {
     'Low': {
@@ -156,35 +157,50 @@ const AnalysisResultDisplay = ({ analysis, onReset }: { analysis: DiagnoseEyeIll
     const config = SeverityConfig[severity];
     const Icon = config.icon;
 
+    const chatContext = `
+        The user uploaded an image of their eye, which has been analyzed by an AI ophthalmologist.
+        Here is the summary of the analysis:
+        - Possible Condition: ${analysis.possibleCondition}
+        - Severity: ${analysis.severity}
+        - Detailed Description: ${analysis.description}
+        - Important Disclaimer: ${analysis.disclaimer}
+        
+        Your role is to answer the user's follow-up questions based *only* on this analysis. Do not invent new information. Always reinforce the disclaimer that you are an AI, not a doctor.
+    `;
+
     return (
-        <Card className="w-full max-w-4xl mx-auto shadow-lg animate-fade-in">
-            <CardHeader>
-                 <CardTitle className="font-headline text-2xl text-primary flex items-center gap-2"><Bot />AI Analysis Result</CardTitle>
-                 <div className="flex items-center gap-2 pt-2">
-                    <Badge variant="outline" className={cn("flex items-center gap-2 text-base px-3 py-1", config.color)}>
-                        <Icon className="w-5 h-5" />
-                        <span>{config.label}</span>
-                    </Badge>
-                </div>
-            </CardHeader>
-            <CardContent className="space-y-6">
-                <div>
-                    <h3 className="text-lg font-semibold text-foreground">Possible Condition</h3>
-                    <p className="text-xl font-bold text-primary">{analysis.possibleCondition}</p>
-                </div>
-                 <div>
-                    <h3 className="text-lg font-semibold text-foreground">Description</h3>
-                    <p className="text-muted-foreground whitespace-pre-wrap">{analysis.description}</p>
-                </div>
-                 <div className="p-4 rounded-md bg-destructive/10 border border-destructive/50">
-                    <h4 className="font-bold text-destructive flex items-center gap-2"><AlertTriangle />Disclaimer</h4>
-                    <p className="text-sm text-destructive/90">{analysis.disclaimer}</p>
-                 </div>
-                 <div className="text-center mt-4">
-                    <Button variant="outline" onClick={onReset}>Analyze Another Image</Button>
-                </div>
-            </CardContent>
-        </Card>
+        <div className="w-full max-w-4xl mx-auto space-y-6 animate-fade-in">
+            <Card className="shadow-lg">
+                <CardHeader>
+                    <CardTitle className="font-headline text-2xl text-primary flex items-center gap-2"><Bot />AI Analysis Result</CardTitle>
+                    <div className="flex items-center gap-2 pt-2">
+                        <Badge variant="outline" className={cn("flex items-center gap-2 text-base px-3 py-1", config.color)}>
+                            <Icon className="w-5 h-5" />
+                            <span>{config.label}</span>
+                        </Badge>
+                    </div>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                    <div>
+                        <h3 className="text-lg font-semibold text-foreground">Possible Condition</h3>
+                        <p className="text-xl font-bold text-primary">{analysis.possibleCondition}</p>
+                    </div>
+                    <div>
+                        <h3 className="text-lg font-semibold text-foreground">Description</h3>
+                        <p className="text-muted-foreground whitespace-pre-wrap">{analysis.description}</p>
+                    </div>
+                    <div className="p-4 rounded-md bg-destructive/10 border border-destructive/50">
+                        <h4 className="font-bold text-destructive flex items-center gap-2"><AlertTriangle />Disclaimer</h4>
+                        <p className="text-sm text-destructive/90">{analysis.disclaimer}</p>
+                    </div>
+                    <div className="text-center mt-4">
+                        <Button variant="outline" onClick={onReset}>Analyze Another Image</Button>
+                    </div>
+                </CardContent>
+            </Card>
+
+            <QAChat reportSummary={chatContext} />
+        </div>
     )
 }
 

@@ -74,10 +74,16 @@ const interactiveQAndAFlow = ai.defineFlow(
       const {output} = await interactiveQAndAPrompt(input);
       return output!;
     } catch (error: any) {
+      if (error.message.includes('400') || error.message.toLowerCase().includes('api key not valid')) {
+        return {
+          answer:
+            '* **Error: Invalid API Key**\n* The provided API key is not valid. Please go to your Google Cloud project, ensure the **Generative Language API** is enabled, and create a new, valid API key. Then, provide the new key to continue.',
+        };
+      }
       if (error.message.includes('503')) {
         return {
           answer:
-            'I am currently having trouble connecting to my knowledge base. Please try again in a moment.',
+            '* I am currently having trouble connecting to my knowledge base. Please try again in a moment.',
         };
       }
       // Re-throw other errors

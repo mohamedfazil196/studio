@@ -9,9 +9,9 @@
  */
 
 import {ai} from '@/ai/genkit';
-import {googleAI} from '@genkit-ai/googleai';
 import {z} from 'genkit';
 import wav from 'wav';
+import {googleAI} from '@genkit-ai/google-genai';
 
 const TranslateAndSpeakInputSchema = z.object({
   text: z.string().describe('The text to translate and speak.'),
@@ -82,9 +82,9 @@ const translateAndSpeakFlow = ai.defineFlow(
             config: {
                 responseModalities: ['AUDIO'],
                 speechConfig: {
-                voiceConfig: {
-                    prebuiltVoiceConfig: { voiceName: 'Algenib' }, // A generic voice
-                },
+                  voiceConfig: {
+                    prebuiltVoiceConfig: { voiceName: 'Algenib' },
+                  },
                 },
             },
             prompt: translatedText,
@@ -95,15 +95,13 @@ const translateAndSpeakFlow = ai.defineFlow(
         }
         
         const audioBuffer = Buffer.from(
-            media.url.substring(media.url.indexOf(',') + 1),
-            'base64'
+          media.url.substring(media.url.indexOf(',') + 1),
+          'base64'
         );
-        
-        const wavBase64 = await toWav(audioBuffer);
         
         return {
             translatedText: translatedText,
-            audioDataUri: 'data:audio/wav;base64,' + wavBase64,
+            audioDataUri: 'data:audio/wav;base64,' + (await toWav(audioBuffer)),
         };
 
     } catch (error: any) {

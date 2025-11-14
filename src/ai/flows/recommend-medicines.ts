@@ -1,7 +1,7 @@
 
 'use server';
 /**
- * @fileOverview A flow that recommends medicines based on a medical report summary.
+ * @fileOverview A flow that recommends medicines based on a medical report.
  *
  * - recommendMedicines - A function that handles the medicine recommendation process.
  * - RecommendMedicinesInput - The input type for the recommendMedicines function.
@@ -12,9 +12,11 @@ import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 
 const RecommendMedicinesInputSchema = z.object({
-  reportSummary: z
+  reportDataUri: z
     .string()
-    .describe('The summary of the medical report to analyze.'),
+    .describe(
+      "A medical report document (PDF, PNG, JPG) as a data URI that must include a MIME type and use Base64 encoding. Expected format: 'data:<mimetype>;base64,<encoded_data>'."
+    ),
 });
 export type RecommendMedicinesInput = z.infer<
   typeof RecommendMedicinesInputSchema
@@ -53,12 +55,12 @@ const prompt = ai.definePrompt({
   name: 'recommendMedicinesPrompt',
   input: {schema: RecommendMedicinesInputSchema},
   output: {schema: RecommendMedicinesOutputSchema},
-  prompt: `You are a medical expert. Based on the following medical report summary, suggest relevant medicines.
+  prompt: `You are a medical expert. Based on the following medical report, suggest relevant medicines.
 You will provide a list of medicines and the reason for each recommendation.
 You MUST also include a clear disclaimer that these are only suggestions and the user must consult a qualified doctor before taking any medication.
 
-Medical Report Summary:
-{{{reportSummary}}}
+Medical Report:
+{{media url=reportDataUri}}
 `,
 });
 

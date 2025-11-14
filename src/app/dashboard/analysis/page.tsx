@@ -36,22 +36,26 @@ export default function AnalysisPage() {
                 try {
                     const dataUri = reader.result as string;
                     
-                    const [doctorSummaryResult, patientSummaryResult, lifestyleSuggestionsResult] = await Promise.all([
+                    // Run all analyses in parallel for better performance and resilience
+                    const [
+                        doctorSummaryResult, 
+                        patientSummaryResult, 
+                        lifestyleSuggestionsResult,
+                        medicinesResult
+                    ] = await Promise.all([
                         generateDoctorStyleSummary({ reportDataUri: dataUri }),
                         generatePatientFriendlySummary({ reportDataUri: dataUri }),
                         provideLifestyleAndHealthSuggestions({ reportDataUri: dataUri }),
+                        recommendMedicines({ reportDataUri: dataUri }),
                     ]);
 
-                    const doctorSummary = doctorSummaryResult.doctorStyleSummary;
-                    if (!doctorSummary) {
-                        throw new Error("Failed to generate a doctor-style summary.");
+
+                    if (!doctorSummaryResult.doctorStyleSummary || !patientSummaryResult.summary || !lifestyleSuggestionsResult.suggestions) {
+                        throw new Error("One or more core analyses failed to generate.");
                     }
 
-                    // The medicines recommendation can still be based on the doctor's text summary
-                    const medicinesResult = await recommendMedicines({ reportSummary: doctorSummary });
-
                     const finalAnalysis: Analysis = {
-                        doctorSummary,
+                        doctorSummary: doctorSummaryResult.doctorStyleSummary,
                         patientSummary: patientSummaryResult.summary,
                         lifestyleSuggestions: lifestyleSuggestionsResult.suggestions,
                         severity: patientSummaryResult.severity,
@@ -80,7 +84,7 @@ export default function AnalysisPage() {
                     console.error("Analysis Error (inner):", error);
                     toast({
                         title: "Analysis Failed",
-                        description: "Something went wrong processing the report. The file may be unreadable or corrupted.",
+                        description: "Something went wrong processing the report. The file may be unreadable or an AI service may be temporarily unavailable.",
                         variant: "destructive",
                     });
                     handleReset();

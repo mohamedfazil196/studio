@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview A flow that recommends medicines based on a medical report summary.
@@ -68,14 +69,26 @@ const recommendMedicinesFlow = ai.defineFlow(
     outputSchema: RecommendMedicinesOutputSchema,
   },
   async input => {
-    const {output} = await prompt(input);
-    if (!output) {
-      return {
-        disclaimer:
-          'AI analysis could not be completed. Please consult a medical professional.',
-        recommendations: [],
-      };
+    try {
+      const {output} = await prompt(input);
+      if (!output) {
+        return {
+          disclaimer:
+            'AI analysis could not be completed. Please consult a medical professional.',
+          recommendations: [],
+        };
+      }
+      return output;
+    } catch (error: any) {
+       if (error.message.includes('503')) {
+         return {
+          disclaimer:
+            'The AI service is currently overloaded and cannot provide medicine recommendations. Please try again later.',
+          recommendations: [],
+        };
+       }
+       // Re-throw other errors
+       throw error;
     }
-    return output;
   }
 );

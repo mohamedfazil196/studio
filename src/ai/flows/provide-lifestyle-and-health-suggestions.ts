@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview A flow that provides lifestyle and health suggestions based on the medical report.
@@ -11,9 +12,11 @@ import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 
 const ProvideLifestyleAndHealthSuggestionsInputSchema = z.object({
-  reportText: z
+  reportDataUri: z
     .string()
-    .describe('The text content of the medical report to analyze.'),
+    .describe(
+      "A medical report document (PDF, PNG, JPG) as a data URI that must include a MIME type and use Base64 encoding. Expected format: 'data:<mimetype>;base64,<encoded_data>'."
+    ),
 });
 export type ProvideLifestyleAndHealthSuggestionsInput = z.infer<
   typeof ProvideLifestyleAndHealthSuggestionsInputSchema
@@ -43,7 +46,7 @@ const prompt = ai.definePrompt({
   prompt: `Based on the following medical report, provide lifestyle and health suggestions to the patient:
 
 Medical Report:
-{{{reportText}}}
+{{media url=reportDataUri}}
 
 Suggestions:`,
 });

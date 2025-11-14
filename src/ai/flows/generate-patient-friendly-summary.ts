@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview This file defines a Genkit flow for generating a patient-friendly summary of a medical report.
@@ -11,7 +12,11 @@ import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 
 const GeneratePatientFriendlySummaryInputSchema = z.object({
-  reportData: z.string().describe('The medical report data in text format.'),
+  reportDataUri: z
+    .string()
+    .describe(
+      "A medical report document (PDF, PNG, JPG) as a data URI that must include a MIME type and use Base64 encoding. Expected format: 'data:<mimetype>;base64,<encoded_data>'."
+    ),
 });
 export type GeneratePatientFriendlySummaryInput = z.infer<
   typeof GeneratePatientFriendlySummaryInputSchema
@@ -48,7 +53,7 @@ const prompt = ai.definePrompt({
 - "Immediate Action": For results that indicate a serious or life-threatening condition requiring urgent medical attention.
 
 Medical Report:
-{{{reportData}}}`,
+{{media url=reportDataUri}}`,
 });
 
 const generatePatientFriendlySummaryFlow = ai.defineFlow(

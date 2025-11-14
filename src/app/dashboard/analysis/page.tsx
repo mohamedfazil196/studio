@@ -36,18 +36,19 @@ export default function AnalysisPage() {
                 try {
                     const dataUri = reader.result as string;
                     
-                    const doctorSummaryResult = await generateDoctorStyleSummary({ reportDataUri: dataUri });
-                    const doctorSummary = doctorSummaryResult.doctorStyleSummary;
+                    const [doctorSummaryResult, patientSummaryResult, lifestyleSuggestionsResult] = await Promise.all([
+                        generateDoctorStyleSummary({ reportDataUri: dataUri }),
+                        generatePatientFriendlySummary({ reportDataUri: dataUri }),
+                        provideLifestyleAndHealthSuggestions({ reportDataUri: dataUri }),
+                    ]);
 
+                    const doctorSummary = doctorSummaryResult.doctorStyleSummary;
                     if (!doctorSummary) {
                         throw new Error("Failed to generate a doctor-style summary.");
                     }
 
-                    const [patientSummaryResult, lifestyleSuggestionsResult, medicinesResult] = await Promise.all([
-                        generatePatientFriendlySummary({ reportData: doctorSummary }),
-                        provideLifestyleAndHealthSuggestions({ reportText: doctorSummary }),
-                        recommendMedicines({ reportSummary: doctorSummary }),
-                    ]);
+                    // The medicines recommendation can still be based on the doctor's text summary
+                    const medicinesResult = await recommendMedicines({ reportSummary: doctorSummary });
 
                     const finalAnalysis: Analysis = {
                         doctorSummary,
@@ -111,7 +112,7 @@ export default function AnalysisPage() {
         return (
            <div className="w-full max-w-2xl mx-auto p-8 space-y-6 flex flex-col items-center justify-center min-h-[70vh] text-center">
               <Bot className="w-24 h-24 text-primary animate-pulse" />
-              <h2 className="text-2xl font-headline font-bold mt-4">Analyzing Your Report...</h2>
+              <h2 className="text-2xl font.headline font-bold mt-4">Analyzing Your Report...</h2>
               <p className="text-muted-foreground">The AI is working its magic. This may take a moment.</p>
               <div className="w-full space-y-4 mt-8">
                 <Skeleton className="h-4 w-3/4 mx-auto" />
@@ -136,5 +137,3 @@ export default function AnalysisPage() {
         <FileUploader onFileUpload={handleFileUpload} />
     )
 }
-
-    

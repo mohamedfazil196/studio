@@ -59,7 +59,18 @@ const generateDoctorStyleSummaryFlow = ai.defineFlow(
     outputSchema: GenerateDoctorStyleSummaryOutputSchema,
   },
   async input => {
-    const {output} = await generateDoctorStyleSummaryPrompt(input);
-    return output!;
+    try {
+      const {output} = await generateDoctorStyleSummaryPrompt(input);
+      return output!;
+    } catch (error: any) {
+      if (error.message.includes('503')) {
+        return {
+          doctorStyleSummary:
+            'The AI service is currently overloaded. Please try again in a few moments.',
+        };
+      }
+      // Re-throw other errors
+      throw error;
+    }
   }
 );

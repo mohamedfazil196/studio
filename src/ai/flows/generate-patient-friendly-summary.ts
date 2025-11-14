@@ -63,7 +63,18 @@ const generatePatientFriendlySummaryFlow = ai.defineFlow(
     outputSchema: GeneratePatientFriendlySummaryOutputSchema,
   },
   async input => {
-    const {output} = await prompt(input);
-    return output!;
+    try {
+      const {output} = await prompt(input);
+      return output!;
+    } catch (error: any) {
+      if (error.message.includes('503')) {
+        return {
+          summary: 'The AI service is currently overloaded. Please try again in a few moments.',
+          severity: 'Needs Attention',
+        };
+      }
+      // Re-throw other errors
+      throw error;
+    }
   }
 );

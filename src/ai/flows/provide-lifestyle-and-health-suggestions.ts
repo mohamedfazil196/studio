@@ -58,7 +58,18 @@ const provideLifestyleAndHealthSuggestionsFlow = ai.defineFlow(
     outputSchema: ProvideLifestyleAndHealthSuggestionsOutputSchema,
   },
   async input => {
-    const {output} = await prompt(input);
-    return output!;
+    try {
+      const {output} = await prompt(input);
+      return output!;
+    } catch (error: any) {
+      if (error.message.includes('503')) {
+        return {
+          suggestions:
+            'The AI service is currently overloaded and cannot provide suggestions at this time. Please try again in a few moments.',
+        };
+      }
+      // Re-throw other errors
+      throw error;
+    }
   }
 );

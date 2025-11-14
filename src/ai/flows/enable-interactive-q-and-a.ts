@@ -70,7 +70,18 @@ const interactiveQAndAFlow = ai.defineFlow(
     outputSchema: InteractiveQAndAOutputSchema,
   },
   async input => {
-    const {output} = await interactiveQAndAPrompt(input);
-    return output!;
+    try {
+      const {output} = await interactiveQAndAPrompt(input);
+      return output!;
+    } catch (error: any) {
+      if (error.message.includes('503')) {
+        return {
+          answer:
+            'I am currently having trouble connecting to my knowledge base. Please try again in a moment.',
+        };
+      }
+      // Re-throw other errors
+      throw error;
+    }
   }
 );

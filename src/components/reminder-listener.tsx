@@ -31,7 +31,7 @@ export const ReminderListener = () => {
             const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
             
             reminders.forEach(reminder => {
-                if (reminder.reminderTimes.includes(currentTime)) {
+                if (Array.isArray(reminder.reminderTimes) && reminder.reminderTimes.includes(currentTime)) {
                     // Show notification
                     new Notification(`Time for your medicine!`, {
                         body: `Take ${reminder.dosage} of ${reminder.medicineName}.`,

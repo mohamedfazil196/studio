@@ -1,0 +1,4 @@
+// Studio doesn't support binary files yet, but this would be a real sound file.
+// For now, it's a placeholder. When this feature is fully implemented in Studio,
+// this would be replaced by the actual MP3 data.
+"placeholder for notification.mp3"

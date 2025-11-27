@@ -13,6 +13,7 @@ import { type MedicalReport } from "@/app/types/medical-report";
 import { CircularProgress } from "@/components/ui/circular-progress";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { getHealthTip } from "@/ai/flows/get-health-tip";
+import { ReminderListener } from "@/components/reminder-listener";
 
 const HealthTracker = () => {
   const { user, firestore } = useFirebase();
@@ -168,6 +169,7 @@ export default function DashboardLayout({
 
   return (
     <SidebarProvider>
+      <ReminderListener />
       <Sidebar>
         <SidebarHeader>
           <div className="flex items-center gap-2">

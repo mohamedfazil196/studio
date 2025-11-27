@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -15,8 +15,9 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { ScrollArea } from './ui/scroll-area';
 import { Skeleton } from './ui/skeleton';
-import { Trash2, BellRing, PlusCircle, Clock, Pill } from 'lucide-react';
+import { Trash2, BellRing, PlusCircle, Clock, Pill, Bell } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 
 const languages = [
     { code: 'en-US', name: 'English (US)' },
@@ -66,6 +67,71 @@ const ReminderSkeleton = () => (
         ))}
     </div>
 )
+
+const NotificationManager = () => {
+    const { toast } = useToast();
+    const [permission, setPermission] = useState<NotificationPermission | null>(null);
+
+    useEffect(() => {
+        if (typeof window !== 'undefined' && 'Notification' in window) {
+            setPermission(Notification.permission);
+        }
+    }, []);
+
+    const requestPermission = () => {
+        if (!('Notification' in window)) {
+            toast({
+                title: "Not Supported",
+                description: "This browser does not support desktop notifications.",
+                variant: "destructive"
+            });
+            return;
+        }
+
+        Notification.requestPermission().then(p => {
+            setPermission(p);
+            if (p === 'granted') {
+                toast({
+                    title: "Notifications Enabled!",
+                    description: "You will now receive real-time reminders.",
+                });
+                new Notification("MediScan AI Reminders", {
+                    body: "Notifications have been successfully enabled!",
+                    icon: "/logo.png"
+                });
+            } else {
+                 toast({
+                    title: "Notifications Blocked",
+                    description: "You have blocked notifications. To enable them, please update your browser settings.",
+                    variant: "destructive"
+                });
+            }
+        });
+    }
+
+    if (permission === 'granted') {
+        return (
+            <Alert className="border-primary/50 text-primary">
+                <Bell className="h-4 w-4" />
+                <AlertTitle>Notifications are enabled!</AlertTitle>
+                <AlertDescription>
+                    You will receive real-time alerts for your medicine reminders.
+                </AlertDescription>
+            </Alert>
+        );
+    }
+    
+    return (
+        <Alert>
+            <BellRing className="h-4 w-4" />
+            <AlertTitle>Enable Real-Time Reminders</AlertTitle>
+            <AlertDescription className="flex items-center justify-between">
+                <p>Click the button to allow desktop notifications for your medicine.</p>
+                <Button onClick={requestPermission}>Enable Notifications</Button>
+            </AlertDescription>
+        </Alert>
+    );
+};
 
 
 export function Reminders() {
@@ -123,115 +189,119 @@ export function Reminders() {
         <Card>
             <CardHeader>
                 <CardTitle className="font-headline text-xl text-primary flex items-center gap-2"><BellRing />Medicine Reminders</CardTitle>
-                <CardDescription>Add and manage your medication schedules. Note: Push notifications are not yet implemented.</CardDescription>
+                <CardDescription>Add and manage your medication schedules. Enable notifications to get real-time desktop alerts.</CardDescription>
             </CardHeader>
-            <CardContent className="grid md:grid-cols-2 gap-8">
-                <div>
-                    <h3 className="text-lg font-semibold mb-4 border-b pb-2">Add New Reminder</h3>
-                    <Form {...form}>
-                        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                            <FormField
-                                control={form.control}
-                                name="medicineName"
-                                render={({ field }) => (
+            <CardContent className="space-y-8">
+                 <NotificationManager />
+
+                <div className="grid md:grid-cols-2 gap-8">
+                    <div>
+                        <h3 className="text-lg font-semibold mb-4 border-b pb-2">Add New Reminder</h3>
+                        <Form {...form}>
+                            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                                <FormField
+                                    control={form.control}
+                                    name="medicineName"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Medicine Name</FormLabel>
+                                            <FormControl>
+                                                <Input placeholder="e.g., Paracetamol" {...field} />
+                                            </FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                                <FormField
+                                    control={form.control}
+                                    name="dosage"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Dosage</FormLabel>
+                                            <FormControl>
+                                                <Input placeholder="e.g., 500mg, 1 tablet" {...field} />
+                                            </FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                                <FormField
+                                    control={form.control}
+                                    name="reminderTime"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Reminder Time (24h format)</FormLabel>
+                                            <FormControl>
+                                                <Input type="time" {...field} />
+                                            </FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                                <FormField
+                                    control={form.control}
+                                    name="preferredLanguage"
+                                    render={({ field }) => (
                                     <FormItem>
-                                        <FormLabel>Medicine Name</FormLabel>
+                                        <FormLabel>Notification Language</FormLabel>
+                                        <Select onValueChange={field.onChange} defaultValue={field.value}>
                                         <FormControl>
-                                            <Input placeholder="e.g., Paracetamol" {...field} />
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Select a language" />
+                                            </SelectTrigger>
                                         </FormControl>
+                                        <SelectContent>
+                                            {languages.map(lang => (
+                                                <SelectItem key={lang.code} value={lang.code}>{lang.name}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                        </Select>
                                         <FormMessage />
                                     </FormItem>
-                                )}
-                            />
-                             <FormField
-                                control={form.control}
-                                name="dosage"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>Dosage</FormLabel>
-                                        <FormControl>
-                                            <Input placeholder="e.g., 500mg, 1 tablet" {...field} />
-                                        </FormControl>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
-                            <FormField
-                                control={form.control}
-                                name="reminderTime"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>Reminder Time (24h format)</FormLabel>
-                                        <FormControl>
-                                            <Input type="time" {...field} />
-                                        </FormControl>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
-                            <FormField
-                                control={form.control}
-                                name="preferredLanguage"
-                                render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Notification Language</FormLabel>
-                                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                    <FormControl>
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Select a language" />
-                                        </SelectTrigger>
-                                    </FormControl>
-                                    <SelectContent>
-                                        {languages.map(lang => (
-                                            <SelectItem key={lang.code} value={lang.code}>{lang.name}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                    </Select>
-                                    <FormMessage />
-                                </FormItem>
-                                )}
-                            />
-                             <Button type="submit" className="w-full">
-                                <PlusCircle className="mr-2 h-4 w-4" /> Add Reminder
-                            </Button>
-                        </form>
-                    </Form>
-                </div>
-                <div>
-                     <h3 className="text-lg font-semibold mb-4 border-b pb-2">Your Reminders</h3>
-                     <ScrollArea className="h-[50vh] pr-4">
-                        {isLoading && <ReminderSkeleton />}
-                        {!isLoading && reminders && reminders.length === 0 && (
-                            <div className="text-center text-muted-foreground py-10">
-                                <BellRing className="mx-auto h-12 w-12" />
-                                <p className="mt-4">You have no reminders set.</p>
-                                <p className="text-sm">Use the form on the left to add one.</p>
-                            </div>
-                        )}
-                        <div className="space-y-4">
-                        {reminders?.map((reminder) => (
-                            <Card key={reminder.id} className="flex items-center justify-between p-4 bg-card-foreground/5">
-                                <div className="flex items-center gap-4">
-                                    <Pill className="h-6 w-6 text-primary" />
-                                    <div>
-                                        <p className="font-semibold">{reminder.medicineName}</p>
-                                        <p className="text-sm text-muted-foreground">{reminder.dosage}</p>
+                                    )}
+                                />
+                                <Button type="submit" className="w-full">
+                                    <PlusCircle className="mr-2 h-4 w-4" /> Add Reminder
+                                </Button>
+                            </form>
+                        </Form>
+                    </div>
+                    <div>
+                        <h3 className="text-lg font-semibold mb-4 border-b pb-2">Your Reminders</h3>
+                        <ScrollArea className="h-[50vh] pr-4">
+                            {isLoading && <ReminderSkeleton />}
+                            {!isLoading && reminders && reminders.length === 0 && (
+                                <div className="text-center text-muted-foreground py-10">
+                                    <BellRing className="mx-auto h-12 w-12" />
+                                    <p className="mt-4">You have no reminders set.</p>
+                                    <p className="text-sm">Use the form on the left to add one.</p>
+                                </div>
+                            )}
+                            <div className="space-y-4">
+                            {reminders?.map((reminder) => (
+                                <Card key={reminder.id} className="flex items-center justify-between p-4 bg-card-foreground/5">
+                                    <div className="flex items-center gap-4">
+                                        <Pill className="h-6 w-6 text-primary" />
+                                        <div>
+                                            <p className="font-semibold">{reminder.medicineName}</p>
+                                            <p className="text-sm text-muted-foreground">{reminder.dosage}</p>
+                                        </div>
                                     </div>
-                                </div>
-                                <div className="flex items-center gap-4">
-                                     <div className="flex items-center gap-2 text-sm">
-                                        <Clock className="h-4 w-4" />
-                                        {reminder.reminderTime}
-                                     </div>
-                                     <Button variant="ghost" size="icon" onClick={() => deleteReminder(reminder.id)}>
-                                        <Trash2 className="h-4 w-4 text-destructive" />
-                                        <span className="sr-only">Delete reminder</span>
-                                    </Button>
-                                </div>
-                            </Card>
-                        ))}
-                        </div>
-                     </ScrollArea>
+                                    <div className="flex items-center gap-4">
+                                        <div className="flex items-center gap-2 text-sm">
+                                            <Clock className="h-4 w-4" />
+                                            {reminder.reminderTime}
+                                        </div>
+                                        <Button variant="ghost" size="icon" onClick={() => deleteReminder(reminder.id)}>
+                                            <Trash2 className="h-4 w-4 text-destructive" />
+                                            <span className="sr-only">Delete reminder</span>
+                                        </Button>
+                                    </div>
+                                </Card>
+                            ))}
+                            </div>
+                        </ScrollArea>
+                    </div>
                 </div>
             </CardContent>
         </Card>

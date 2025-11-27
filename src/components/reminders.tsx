@@ -326,7 +326,7 @@ export function Reminders() {
                                     </div>
                                     <div className="flex flex-col items-end gap-2">
                                         <div className="flex flex-wrap justify-end gap-2">
-                                        {reminder.reminderTimes.map(time => (
+                                        {Array.isArray(reminder.reminderTimes) && reminder.reminderTimes.map(time => (
                                              <Badge key={time} variant="outline" className="flex items-center gap-1 text-xs">
                                                 <Clock className="h-3 w-3" />
                                                 {time}

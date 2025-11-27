@@ -9,12 +9,11 @@ type MedicineReminder = {
     id: string;
     medicineName: string;
     dosage: string;
-    reminderTime: string;
+    reminderTimes: string[];
 };
 
 export const ReminderListener = () => {
     const { firestore, user } = useFirebase();
-    const audioRef = useRef<HTMLAudioElement | null>(null);
 
     const remindersQuery = useMemoFirebase(
         () => user && firestore ? collection(firestore, 'users', user.uid, 'medicine_reminders') : null,
@@ -23,14 +22,8 @@ export const ReminderListener = () => {
     const { data: reminders } = useCollection<MedicineReminder>(remindersQuery);
 
     useEffect(() => {
-        // Preload the audio
-        if (typeof window !== 'undefined') {
-            audioRef.current = new Audio('/notification.mp3');
-            audioRef.current.load();
-        }
-
         const checkReminders = () => {
-            if (!reminders || Notification.permission !== 'granted') {
+            if (!reminders || typeof window === 'undefined' || !('Notification' in window) || Notification.permission !== 'granted') {
                 return;
             }
 
@@ -38,14 +31,11 @@ export const ReminderListener = () => {
             const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
             
             reminders.forEach(reminder => {
-                if (reminder.reminderTime === currentTime) {
-                    // Play sound
-                    audioRef.current?.play().catch(e => console.error("Error playing sound:", e));
-                    
+                if (reminder.reminderTimes.includes(currentTime)) {
                     // Show notification
                     new Notification(`Time for your medicine!`, {
                         body: `Take ${reminder.dosage} of ${reminder.medicineName}.`,
-                        icon: '/logo.png', // Ensure you have a logo in your /public folder
+                        icon: '/logo.png',
                         badge: '/logo.png'
                     });
                 }

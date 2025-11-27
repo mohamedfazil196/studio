@@ -7,7 +7,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useFirebase, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, doc } from 'firebase/firestore';
-import { addDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase/non-blocking-updates';
+import { addDocumentNonBlocking, deleteDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -15,9 +15,10 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { ScrollArea } from './ui/scroll-area';
 import { Skeleton } from './ui/skeleton';
-import { Trash2, BellRing, PlusCircle, Clock, Pill, Bell } from 'lucide-react';
+import { Trash2, BellRing, PlusCircle, Clock, Pill, Bell, Tag, Plus, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
+import { Badge } from './ui/badge';
 
 const languages = [
     { code: 'en-US', name: 'English (US)' },
@@ -36,16 +37,17 @@ const languages = [
 const reminderSchema = z.object({
     medicineName: z.string().min(1, "Medicine name is required."),
     dosage: z.string().min(1, "Dosage is required."),
-    reminderTime: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, "Invalid time format (HH:MM)."),
+    reminderTimes: z.array(z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/)).min(1, "At least one reminder time is required."),
     preferredLanguage: z.string().min(1, "Please select a language."),
 });
 
 type ReminderFormValues = z.infer<typeof reminderSchema>;
 
-type MedicineReminder = ReminderFormValues & {
+type MedicineReminder = Omit<ReminderFormValues, 'reminderTimes'> & {
     id: string;
     userId: string;
     timeZone: string;
+    reminderTimes: string[];
 };
 
 const ReminderSkeleton = () => (
@@ -137,6 +139,7 @@ const NotificationManager = () => {
 export function Reminders() {
     const { firestore, user } = useFirebase();
     const { toast } = useToast();
+    const [timeInput, setTimeInput] = useState('');
 
     const remindersQuery = useMemoFirebase(
         () => user && firestore ? collection(firestore, 'users', user.uid, 'medicine_reminders') : null,
@@ -149,10 +152,26 @@ export function Reminders() {
         defaultValues: {
             medicineName: "",
             dosage: "",
-            reminderTime: "",
+            reminderTimes: [],
             preferredLanguage: "en-US",
         },
     });
+
+    const addTime = () => {
+        const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
+        if (timeInput && timeRegex.test(timeInput)) {
+            const currentTimes = form.getValues('reminderTimes');
+            if (!currentTimes.includes(timeInput)) {
+                form.setValue('reminderTimes', [...currentTimes, timeInput]);
+            }
+            setTimeInput('');
+        }
+    };
+
+    const removeTime = (timeToRemove: string) => {
+        const currentTimes = form.getValues('reminderTimes');
+        form.setValue('reminderTimes', currentTimes.filter(t => t !== timeToRemove));
+    };
 
     async function onSubmit(values: ReminderFormValues) {
         if (!user || !firestore) return;
@@ -225,19 +244,37 @@ export function Reminders() {
                                         </FormItem>
                                     )}
                                 />
-                                <FormField
+                                 <FormField
                                     control={form.control}
-                                    name="reminderTime"
+                                    name="reminderTimes"
                                     render={({ field }) => (
                                         <FormItem>
-                                            <FormLabel>Reminder Time (24h format)</FormLabel>
-                                            <FormControl>
-                                                <Input type="time" {...field} />
-                                            </FormControl>
+                                            <FormLabel>Reminder Times</FormLabel>
+                                            <div className="flex items-center gap-2">
+                                                <Input 
+                                                    type="time" 
+                                                    value={timeInput}
+                                                    onChange={(e) => setTimeInput(e.target.value)}
+                                                />
+                                                <Button type="button" size="icon" onClick={addTime}>
+                                                    <Plus />
+                                                </Button>
+                                            </div>
+                                            <div className="flex flex-wrap gap-2 pt-2">
+                                                {field.value.map(time => (
+                                                    <Badge key={time} variant="secondary" className="flex items-center gap-2">
+                                                        {time}
+                                                        <button type="button" onClick={() => removeTime(time)} className="rounded-full hover:bg-destructive/20 p-0.5">
+                                                            <X className="h-3 w-3" />
+                                                        </button>
+                                                    </Badge>
+                                                ))}
+                                            </div>
                                             <FormMessage />
                                         </FormItem>
                                     )}
                                 />
+
                                 <FormField
                                     control={form.control}
                                     name="preferredLanguage"
@@ -279,7 +316,7 @@ export function Reminders() {
                             )}
                             <div className="space-y-4">
                             {reminders?.map((reminder) => (
-                                <Card key={reminder.id} className="flex items-center justify-between p-4 bg-card-foreground/5">
+                                <Card key={reminder.id} className="flex items-start justify-between p-4 bg-card-foreground/5">
                                     <div className="flex items-center gap-4">
                                         <Pill className="h-6 w-6 text-primary" />
                                         <div>
@@ -287,12 +324,16 @@ export function Reminders() {
                                             <p className="text-sm text-muted-foreground">{reminder.dosage}</p>
                                         </div>
                                     </div>
-                                    <div className="flex items-center gap-4">
-                                        <div className="flex items-center gap-2 text-sm">
-                                            <Clock className="h-4 w-4" />
-                                            {reminder.reminderTime}
+                                    <div className="flex flex-col items-end gap-2">
+                                        <div className="flex flex-wrap justify-end gap-2">
+                                        {reminder.reminderTimes.map(time => (
+                                             <Badge key={time} variant="outline" className="flex items-center gap-1 text-xs">
+                                                <Clock className="h-3 w-3" />
+                                                {time}
+                                            </Badge>
+                                        ))}
                                         </div>
-                                        <Button variant="ghost" size="icon" onClick={() => deleteReminder(reminder.id)}>
+                                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => deleteReminder(reminder.id)}>
                                             <Trash2 className="h-4 w-4 text-destructive" />
                                             <span className="sr-only">Delete reminder</span>
                                         </Button>
